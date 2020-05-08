@@ -1111,7 +1111,7 @@ class ModList(_ModsUIList):
                 item_format.back_key = u'mods.bkgd.doubleTime.load'
             else:
                 item_format.back_key = u'mods.bkgd.doubleTime.exists'
-        elif mod_info.hasBadMasterNames():
+        elif mod_info.has_unicode_masters:
             if load_order.cached_is_active(mod_name):
                 item_format.back_key = u'mods.bkgd.doubleTime.load'
             else:

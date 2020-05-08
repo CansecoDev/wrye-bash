@@ -188,8 +188,8 @@ class Mod_CreateDummyMasters(OneItemLink, _LoadLink):
             newInfo = bosh.ModInfo(self._selected_info.info_dir.join(master))
             to_refresh.append((master, newInfo, previous_master))
             previous_master = master
-            newFile = ModFile(newInfo, self._load_fact()) ###
-            newFile.tes4.author = u'BASHED DUMMY'
+            newFile = ModFile(newInfo, self._load_fact())
+            newFile.tes4.author = b'BASHED DUMMY'
             # Add the appropriate flags based on extension. This is obviously
             # just a guess - you can have a .esm file without an ESM flag in
             # Skyrim LE - but these are also just dummy masters.

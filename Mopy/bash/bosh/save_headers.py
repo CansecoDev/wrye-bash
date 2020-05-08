@@ -206,7 +206,6 @@ class SaveFileHeader(object):
         return True
 
 def _pack_str8_1(out, val): # TODO: val = val.reencode(...)
-    val = encode(val)
     pack_bzstr8(out, val)
     return len(val) + 2
 class OblivionSaveHeader(SaveFileHeader):
@@ -223,7 +222,8 @@ class OblivionSaveHeader(SaveFileHeader):
         'header_version': (pack_int, unpack_int),
         'header_size':    (pack_int, unpack_int),
         'saveNum':        (pack_int, unpack_int),
-        'pcName':         (_pack_str8_1, unpack_str8),
+        'pcName':         (lambda out, x: _pack_str8_1(
+           out, x.reencode(None)), unpack_str8),
         'pcLevel':        (pack_short, unpack_short),
         'pcLocation':     (_pack_str8_1, unpack_str8),
         'gameDays':       (pack_float, unpack_float),
