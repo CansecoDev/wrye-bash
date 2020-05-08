@@ -64,7 +64,8 @@ from ...brec import FID, AMelItems, AMelLLItems, AMelNvnm, AMelVmad, \
     MelValueWeight, MelWaterType, MelWeight, MelWorldBounds, MelWthrColors, \
     MelXlod, NavMeshFlags, NotPlayableFlag, PartialLoadDecider, \
     PerkEpdfDecider, VWDFlag, gen_ambient_lighting, gen_color, gen_color3, \
-    null3, null4, perk_distributor, perk_effect_key, MelLinkColors
+    null3, null4, perk_distributor, perk_effect_key, MelLinkColors, \
+    MelModelCompare
 
 _is_sse = bush.game.fsName in (
     'Skyrim Special Edition', 'Skyrim VR', 'Enderal Special Edition')
@@ -84,7 +85,7 @@ def sse_only(sse_obj):
 #------------------------------------------------------------------------------
 # Record Elements -------------------------------------------------------------
 #------------------------------------------------------------------------------
-class MelModel(MelGroup):
+class MelModel(MelModelCompare):
     """Represents a model subrecord."""
     # MODB and MODD are no longer used by TES5Edit
     typeSets = {
@@ -2657,7 +2658,7 @@ class MreQust(MelRecord):
             MelStruct(b'INDX', ['H', '2B'], 'index', (_stageFlags, 'flags'),
                       'unknown'),
             MelGroups('log_entries',
-                MelUInt8Flags(b'QSDT', u'stageFlags', stageEntryFlags),
+                MelUInt8Flags(b'QSDT', 'stageFlags', stageEntryFlags, set_default=0),
                 MelConditionList(),
                 MelLString(b'CNAM', 'log_entry_text'),
                 MelFid(b'NAM0', 'nextQuest'),

@@ -46,7 +46,7 @@ from ...brec import FID, AMelItems, AMelLLItems, AMelNvnm, AMelVmad, \
     MelLensShared, MelLighFade, MelLighLensFlare, MelLLChanceNone, \
     MelLLFlags, MelLLGlobal, MelLscrCameraPath, MelLscrNif, MelLscrRotation, \
     MelLString, MelLtexGrasses, MelLtexSnam, MelMatoPropertyData, \
-    MelMattShared, MelNextPerk, MelNodeIndex, MelNull, MelObject, \
+    MelMattShared, MelNextPerk, MelNodeIndex, MelNull, \
     MelObjectTemplate, MelPartialCounter, MelPerkData, \
     MelPerkParamsGroups, MelRace, MelRandomTeleports, MelReadOnly, MelRecord, \
     MelRelations, MelSeasons, MelSequential, MelSet, MelShortName, \
@@ -57,14 +57,14 @@ from ...brec import FID, AMelItems, AMelLLItems, AMelNvnm, AMelVmad, \
     MelUnloadEvent, MelUnorderedGroups, MelValueWeight, MelWaterType, \
     MelWeight, NavMeshFlags, NotPlayableFlag, PartialLoadDecider, \
     PerkEpdfDecider, VWDFlag, gen_color, gen_color3, lens_distributor, \
-    perk_distributor, perk_effect_key, AMreWrld
+    perk_distributor, perk_effect_key, AMreWrld, MelModelCompare
 
 ##: What about texture hashes? I carried discarding them forward from Skyrim,
 # but that was due to the 43-44 problems. See also #620.
 #------------------------------------------------------------------------------
 # Record Elements -------------------------------------------------------------
 #------------------------------------------------------------------------------
-class MelModel(MelGroup):
+class MelModel(MelModelCompare):
     """Represents a model subrecord."""
     # MODB and MODD are no longer used by TES5Edit
     typeSets = {
@@ -1374,14 +1374,12 @@ class MelFurnMarkerParams(MelArray):
 
     def _load_array(self, record, ins, sub_type, size_, *debug_strs):
         append_entry = getattr(record, self.attr).append
-        entry_slots = self.array_element_attrs
         # Form version 125 added the entry types to the end
         entry_size = 24 if record.header.form_version >= 125 else 20
         load_entry = self._real_loader.load_mel
         for x in range(size_ // entry_size):
-            arr_entry = MelObject()
+            arr_entry = self._mel_object_type()
             append_entry(arr_entry)
-            arr_entry.__slots__ = entry_slots
             load_entry(arr_entry, ins, sub_type, entry_size, *debug_strs)
 
 class MreFurn(AMreWithItems, AMreWithKeywords):

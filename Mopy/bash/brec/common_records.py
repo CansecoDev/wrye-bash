@@ -33,7 +33,7 @@ from .advanced_elements import AttrValDecider, MelSimpleArray, MelSorted, \
 from .basic_elements import MelBase, MelFid, MelFids, MelFixedString, \
     MelFloat, MelGroups, MelLString, MelNull, MelSInt32, MelString, \
     MelStruct, MelUInt8Flags, MelUInt32, MelUInt32Flags, MelUnicode, \
-    unpackSubHeader
+    unpackSubHeader, MelGroup, AttrsCompare
 from .common_subrecords import MelBounds, MelColor, MelColorInterpolator, \
     MelDebrData, MelDescription, MelEdid, MelFull, MelIcon, MelImpactDataset, \
     MelValueInterpolator
@@ -182,9 +182,8 @@ class AMreHeader(MelRecord):
         def getSlotsUsed(self):
             return 'masters', 'master_sizes'
 
-        def setDefault(self, record):
-            record.masters = []
-            record.master_sizes = []
+        def getDefaulters(self, mel_set_instance):
+            mel_set_instance.listers.update(['masters', 'master_sizes'])
 
         def load_mel(self, record, ins, sub_type, size_, *debug_strs):
             __unpacker=structs_cache[u'Q'].unpack
@@ -735,3 +734,12 @@ class MreGmst(MelRecord):
             fallback=MelSInt32(b'DATA', u'value')
         ),
     )
+
+#------------------------------------------------------------------------------
+class MelModelCompare(MelGroup):
+
+    class _CompareModPaths(AttrsCompare):
+        compare_actions = {'modPath': lambda x: x and x.lower()}
+        compare_attrs = tuple(compare_actions)
+
+    _mel_object_base_type = _CompareModPaths
