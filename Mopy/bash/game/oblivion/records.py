@@ -34,7 +34,7 @@ from ...brec import FID, AMelItems, AMelLLItems, AMreActor, AMreCell, \
     MelConditionsTes4, MelContData, MelDeathItem, MelDescription, \
     MelDoorFlags, MelEdid, MelEffectsTes4, MelEffectsTes4ObmeFull, \
     MelEnableParent, MelEnchantment, MelFactions, MelFactRanks, MelFid, \
-    MelFids, MelFloat, MelFull, MelGrasData, MelGroup, MelGroups, \
+    MelFids, MelFloat, MelFull, MelGrasData, MelGroups, \
     MelHairFlags, MelIco2, MelIcon, MelIdleRelatedAnims, MelIngredient, \
     MelLandShared, MelLighFade, MelLists, MelLLChanceNone, MelLLFlags, \
     MelLscrLocations, MelLtexGrasses, MelLtexSnam, MelMapMarker, MelNull, \
@@ -47,12 +47,13 @@ from ...brec import FID, AMelItems, AMelLLItems, AMreActor, AMreCell, \
     MelString, MelStruct, MelTruncatedStruct, MelUInt8, MelUInt8Flags, \
     MelUInt16, MelUInt32, MelUInt32Flags, MelUnion, MelValueWeight, \
     MelWeight, MelWorldBounds, MelWthrColors, MelXlod, PartialLoadDecider, \
-    SpellFlags, attr_csv_struct, gen_color, null2, null4, MelMgefEdidTes4
+    SpellFlags, attr_csv_struct, gen_color, null2, null4, MelMgefEdidTes4, \
+    MelModelCompare
 
 #------------------------------------------------------------------------------
 # Record Elements -------------------------------------------------------------
 #------------------------------------------------------------------------------
-class MelModel(MelGroup):
+class MelModel(MelModelCompare):
     """Represents a model subrecord."""
     typeSets = {
         b'MODL': (b'MODL', b'MODB', b'MODT'),
@@ -343,8 +344,8 @@ class MreHasEffects(MelRecord):
             school = self._get_spell_school()
             buffWrite(f'{aValues[20 + school]}\n')
         for index, effect in enumerate(self.effects):
-            if effect.scriptEffect: ##: #480 - setDefault commit - return None
-                effectName = effect.scriptEffect.full or 'Script Effect'
+            if se := effect.scriptEffect:  # should evaluate to False if empty
+                effectName = se.full or 'Script Effect'
             else:
                 effectName = MreMgef.mgef_name[effect.effect_sig]
                 if effect.effect_sig in avEffects:
@@ -383,7 +384,7 @@ class MreHasEffects(MelRecord):
                                                        int_or_zero(actorvalue))
             if None in (eff_name,magnitude,area,duration,range_,actorvalue):
                 continue
-            eff = cls.getDefault('effects')
+            eff = cls.get_mel_object_for_group('effects')
             effects_list.append(eff)
             eff.effect_sig = str_to_sig(eff_name)
             eff.magnitude = magnitude
@@ -407,7 +408,8 @@ class MreHasEffects(MelRecord):
             sename = str_or_none(sename)
             if None in (seschool, sename):
                 continue
-            eff.scriptEffect = se = cls.getDefault('effects.scriptEffect')
+            eff.scriptEffect = se = cls.get_mel_object_for_group(
+                'effects.scriptEffect')
             se.full = sename
             se.script_fid = _coerce_fid(semod, seobj)
             se.school = seschool
@@ -439,8 +441,7 @@ class MreHasEffects(MelRecord):
             actorvalue = actorValueNumber_Name.get(actorvalue,actorvalue)
             output.append(f',,"{efname}","{magnitude:d}","{area:d}",'
                           f'"{duration:d}","{range_}","{actorvalue}"')
-            if effect.scriptEffect: ##: #480 - setDefault commit - return None
-                se = effect.scriptEffect
+            if se := effect.scriptEffect: # should evaluate to False if empty
                 longid, seschool, sevisual, seflags, sename = \
                     se.script_fid, se.school, se.visual, se.flags, se.full
                 sevisual = 'NONE' if sevisual == null4 else sig_to_str(
@@ -1750,12 +1751,11 @@ class MreNpc_(AMreActor):
     def setRace(self, race):
         """Set additional race info."""
         self.race = race
-        if not self.model:
-            self.model = self.getDefault('model')
         if race in (0x23fe9, 0x223c7): # Argonian & Khajiit
             self.model.modPath = r'Characters\_Male\SkeletonBeast.NIF'
         else:
             self.model.modPath = r'Characters\_Male\skeleton.nif'
+        self.model.modb = 0.0 ##: Correct? # TODO NEEDED?
         fnams = {
             0x23fe9: b'\xdc<',    # Argonian
             0x224fc: b'H\x1d',    # Breton
@@ -1875,7 +1875,7 @@ class MreQust(_ObIcon):
         MelSorted(MelGroups('stages',
             MelSInt16(b'INDX', 'stage'),
             MelGroups('entries',
-                MelUInt8Flags(b'QSDT', 'flags', _StageFlags),
+                MelUInt8Flags(b'QSDT', 'flags', _StageFlags, set_default=0),
                 MelConditionsTes4(),
                 MelString(b'CNAM','text'),
                 MelEmbeddedScript(),

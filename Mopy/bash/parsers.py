@@ -426,7 +426,7 @@ class _AParser(_HandleAliases):
     @classmethod
     def get_empty_object(cls, record, faction_fid):
         """Get an empty MelObject to add to the record array."""
-        target_entry = record.getDefault(cls._target_array)
+        target_entry = record.get_mel_object_for_group(cls._target_array)
         target_entry.faction = faction_fid
         return target_entry
 

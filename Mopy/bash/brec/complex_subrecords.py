@@ -210,8 +210,16 @@ class _MelCtda(MelUnion):
     def getSlotsUsed(self):
         return self.decider_result_attr, *self._ctda_mel.getSlotsUsed()
 
-    def setDefault(self, record):
-        next(iter(self.element_mapping.values())).setDefault(record)
+    def getDefaulters(self, mel_set_instance):
+        defaultrs = mel_set_instance.defaulters
+        if self.decider_result_attr in defaultrs: # and defaultrs[self.decider_result_attr] is not None:
+            raise SyntaxError(
+                f'{self} duplicate attr {self.decider_result_attr}')
+        defaultrs[self.decider_result_attr] = None
+        # yep this one too will be assigned to slotted MelObject
+        self.decider._loader.getDefaulters(mel_set_instance)
+        next(iter(self.element_mapping.values())).getDefaulters(mel_set_instance)
+        # no fallback
 
 class _MelCtdaFo3(_MelCtda):
     """Version of _MelCtda that handles the additional complexities that were
@@ -338,22 +346,14 @@ class _MelObmeScitGroup(MelGroup):
     for another part of the code that's suffering from this). And we can't
     simply not put this in a group, because a bunch of code relies on a group
     called 'scriptEffect' existing..."""
+
+    class _MelHackyObject(MelObject):
+        __slots__ = ('efix_param_info', )
+    _mel_object_base_type = _MelHackyObject
+
     def load_mel(self, record, ins, sub_type, size_, *debug_strs):
         target = getattr(record, self.attr)
-        if target is None:
-            class _MelHackyObject(MelObject):
-                @property
-                def efix_param_info(self):
-                    return record.efix_param_info
-                @efix_param_info.setter
-                def efix_param_info(self, new_efix_info):
-                    record.efix_param_info = new_efix_info
-            target = _MelHackyObject()
-            for element in self.elements:
-                element.setDefault(target)
-            target.__slots__ = [s for element in self.elements for s in
-                                element.getSlotsUsed()]
-            setattr(record, self.attr, target)
+        target.efix_param_info = record.efix_param_info
         self.loaders[sub_type].load_mel(target, ins, sub_type, size_,
             *debug_strs)
 
@@ -478,7 +478,8 @@ class MelEffectsTes4(MelSequential):
                 # REHE is Restore target's Health - EFID.effect_sig
                 # must be the same as EFIT.effect_sig. No need for _MelMgefCode
                 # here because we know we don't have OBME on this record
-                MelStruct(b'EFID', ['4s'], ('effect_sig', b'REHE')),
+                MelStruct(b'EFID', ['4s'], ('effect_sig', b'REHE'),
+                          is_required=True),
                 MelStruct(b'EFIT', ['4s', '4I', 'i'], ('effect_sig', b'REHE'),
                     'magnitude', 'area', 'duration', 'recipient',
                     'actorValue', is_required=True),
@@ -547,9 +548,9 @@ class MelEffectsTes4(MelSequential):
 
     # Note that we only support creating vanilla effects, as our records system
     # isn't expressive enough to pass more info along here
-    def getDefaulters(self, defaulters, base):
+    def getDefaulters(self, mel_set_instance):
         for element in self._vanilla_elements:
-            element.getDefaulters(defaulters, base)
+            element.getDefaulters(mel_set_instance)
 
     def getLoaders(self, loaders):
         # We need to collect all signatures and assign ourselves for them all
@@ -1298,11 +1299,6 @@ class _AVmadComponent(object):
 
     @bolt.fast_cached_property
     def _component_class(self):
-        # TODO(inf) This seems to work - what we're currently doing in
-        #  records code, namely reassigning __slots__, does *nothing*:
-        #  https://stackoverflow.com/questions/27907373/dynamically-change-slots-in-python-3
-        #  Fix that by refactoring class creation like this for
-        #  MelBase/MelSet etc.!
         class _MelComponentInstance(MelObject):
             __slots__ = self.used_slots
         return _MelComponentInstance

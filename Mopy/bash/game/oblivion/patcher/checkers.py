@@ -207,7 +207,7 @@ class SEWorldTestsPatcher(ExSpecial):
             for condition in record.conditions:
                 if condition.ifunc == 365: break #--365: playerInSeWorld
             else:
-                condition = record.getDefault(u'conditions')
+                condition = record.get_mel_object_for_group('conditions')
                 condition.ifunc = 365
                 # Set parameters etc. needed for this function (no parameters
                 # and a float comparison value)
