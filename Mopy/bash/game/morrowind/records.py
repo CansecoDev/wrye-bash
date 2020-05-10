@@ -83,7 +83,7 @@ class MelAIAccompanyPackage(MelStruct):
     def __init__(self, ai_package_sig):
         super(MelAIAccompanyPackage, self).__init__(ai_package_sig,
             ['3f', 'H', '32s', 'B', 's'], 'dest_x', 'dest_y', 'dest_z',
-            'package_duration', (FixedString(32), 'package_id'),
+            'package_duration', (FixedString(str_length=32), 'package_id'),
             'unknown_marker', 'unused1')
 
 class MelAIPackages(MelGroups):
@@ -93,7 +93,7 @@ class MelAIPackages(MelGroups):
         super(MelAIPackages, self).__init__(u'aiPackages',
             MelUnion({
                 b'AI_A': MelStruct(b'AI_A', [u'32s', u'B'],
-                    (FixedString(32), u'package_name'),
+                    (FixedString(str_length=32), u'package_name'),
                     (u'unknown_marker', 1)),
                 b'AI_E': MelAIAccompanyPackage(b'AI_E'),
                 b'AI_F': MelAIAccompanyPackage(b'AI_F'),
@@ -152,9 +152,8 @@ class MelIconTes3(MelIcons):
 class MelItems(MelGroups):
     """Wraps MelGroups for the common task of defining a list of items."""
     def __init__(self):
-        super(MelItems, self).__init__(u'items',
-            MelStruct(b'NPCO', [u'I', u'32s'], u'count', (FixedString(32), u'item')),
-        )
+        super().__init__('items', MelStruct(b'NPCO', ['I', '32s'], 'count',
+            (FixedString(str_length= 32), 'item')))
 
 #------------------------------------------------------------------------------
 class MelLLItemsTes3(MelSequential):
@@ -217,7 +216,8 @@ class MelScriptId(MelString):
 class MelSpellsTes3(MelGroups):
     """Handles NPCS, Morrowind's version of SPLO."""
     def __init__(self):
-        super().__init__('spells', MelFixedString(b'NPCS', 'spell_id', 32))
+        super().__init__('spells', MelFixedString(b'NPCS', 'spell_id',
+                                                  str_length=32))
 
 #------------------------------------------------------------------------------
 # Shared (plugins + saves) record classes -------------------------------------
@@ -228,15 +228,15 @@ class MreTes3(AMreHeader):
 
     melSet = MelSet(
         MelStruct(b'HEDR', ['f', 'I', '32s', '256s', 'I'], ('version', 1.3),
-            'esp_flags', (AutoFixedString(32), 'author_pstr'),
-            (AutoFixedString(256), 'description_pstr'), 'numRecords'),
+            'esp_flags', (AutoFixedString(str_length=32), 'author_pstr'),
+            (AutoFixedString(str_length=256), 'description_pstr'), 'numRecords'),
         AMreHeader.MelMasterNames(),
         MelSavesOnly(
             # Wrye Mash calls unknown1 'day', but that seems incorrect?
             MelPostMastS(b'GMDT', ['6f', '64s', 'f', '32s'], 'pc_curr_health',
                 'pc_max_health', 'unknown1', 'unknown2', 'unknown3',
-                'unknown4', (FixedString(64), 'curr_cell'),
-                'unknown5', (AutoFixedString(32), 'pc_name')),
+                'unknown4', (FixedString(str_length=64), 'curr_cell'),
+                'unknown5', (AutoFixedString(str_length=32), 'pc_name_pstr')),
             MelPostMast(b'SCRD', 'unknown_scrd'), #likely screenshot-related
             MelArray('screenshot_data', # Yes, the correct order is bgra
                 MelPostMastS(b'SCRS', ['4B'], 'blue', 'green', 'red', 'alpha'),
@@ -602,7 +602,7 @@ class MreGlob(MelRecord):
 
     melSet = MelSet(
         MelMWId(),
-        MelFixedString(b'FNAM', 'global_format', 1),
+        MelFixedString(b'FNAM', 'global_format'),
         MelFloat(b'FLTV', u'global_value'),
     )
 
@@ -962,9 +962,8 @@ class MreRegn(MelRecord):
             u'chance_snow', u'chance_blizzard', old_versions={u'8B'}),
         MelString(b'BNAM', u'sleep_creature'),
         MelColor(),
-        MelGroups(u'sound_chances',
-            MelStruct(b'SNAM', [u'32s', u'B'], (FixedString(32), u'sound_name'),
-                u'sound_chance'),
+        MelGroups(u'sound_chances', MelStruct(b'SNAM', [u'32s', u'B'], (
+            FixedString(str_length=32), u'sound_name'), u'sound_chance')
         ),
     )
 
@@ -990,7 +989,7 @@ class MreScpt(MelRecord):
 
     melSet = MelSet(
         # Yes, the usual NAME sits in this subrecord instead
-        MelStruct(b'SCHD', [u'32s', u'5I'], (FixedString(32), u'mw_id'),
+        MelStruct(b'SCHD', [u'32s', u'5I'], (FixedString(str_length=32), u'mw_id'),
             u'num_shorts', u'num_longs', u'num_floats', u'script_data_size',
             u'local_var_size'),
         MelStrings(b'SCVR', u'script_variables'),

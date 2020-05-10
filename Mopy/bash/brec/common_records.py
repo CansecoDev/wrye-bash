@@ -30,18 +30,18 @@ from operator import attrgetter
 from . import utils_constants
 from .advanced_elements import AttrValDecider, MelSimpleArray, MelSorted, \
     MelUnion
-from .basic_elements import MelBase, MelFid, MelFids, MelFixedString, \
-    MelFloat, MelGroups, MelLString, MelNull, MelSInt32, MelString, \
-    MelStruct, MelUInt8Flags, MelUInt32, MelUInt32Flags, MelUnicode, \
-    unpackSubHeader, MelGroup, AttrsCompare
+from .basic_elements import MelBase, MelFid, MelFids, MelFixedString, MelFloat, \
+    MelGroups, MelLString, MelNull, MelSInt32, MelString, MelStruct, \
+    MelUInt8Flags, MelUInt32, MelUInt32Flags, unpackSubHeader, MelGroup, \
+    AttrsCompare, MelULong64
 from .common_subrecords import MelBounds, MelColor, MelColorInterpolator, \
     MelDebrData, MelDescription, MelEdid, MelFull, MelIcon, MelImpactDataset, \
     MelValueInterpolator
 from .record_structs import MelRecord, MelSet
 from .utils_constants import FID, FormId, NotPlayableFlag, gen_coed_key
 from .. import bolt, exception
-from ..bolt import Flags, FName, decoder, flag, sig_to_str, struct_pack, \
-    structs_cache, to_unix_newlines, to_win_newlines, ChardetStr, StripNewlines
+from ..bolt import Flags, flag, sig_to_str, to_unix_newlines, \
+    to_win_newlines, ChardetStr, StripNewlines
 
 #------------------------------------------------------------------------------
 # Mixins ----------------------------------------------------------------------
@@ -91,6 +91,20 @@ class _DescrStr(_CaseSensitiveStr):
         # in addition to super convert all newlines to CR-LF - description only
         super()._decode()
         self._decoded_str = to_win_newlines(self._decoded_str)
+
+class _MelMaster(MelString):
+    """A MelString that appends to a list of attributes"""
+    _wrapper_bytes_type = ChardetStr
+
+    def load_mel(self, record, ins, sub_type, size_, *debug_strs):
+        attr_list = record.__getattribute__(self.attr)
+        attr_list.append(self._wrapper_bytes_type(ins.read(size_, *debug_strs)))
+
+class _MelMasterSize(MelULong64):
+
+    def load_mel(self, record, ins, sub_type, size_, *debug_strs):
+        attr_list = record.__getattribute__(self.attr)
+        attr_list.append(ins.unpack(self._unpacker, size_, *debug_strs))
 
 class _MelChardet(MelString):
     """Falls back to chardet to decode the string and compares case
@@ -194,44 +208,27 @@ class AMreHeader(MelRecord):
     class HeaderFlags(MelRecord.HeaderFlags):
         esm_flag: bool = flag(0)
 
-    class MelMasterNames(MelBase):
+    class MelMasterNames(MelGroups):
         """Handles both MAST and DATA, but turns them into two separate lists.
         This is done to make updating the master list much easier."""
         def __init__(self):
-            self._debug = False
-            self.mel_sig = b'MAST' # just in case something is expecting this
+            super().__init__('masters_info',
+                             _MelMaster(b'MAST', 'plugin_masters'),
+                             MelULong64(b'DATA', 'master_sizes'))
 
-        def getLoaders(self, loaders):
-            loaders[b'MAST'] = loaders[b'DATA'] = self
-
-        def getSlotsUsed(self):
-            return 'masters', 'master_sizes'
-
-        def getDefaulters(self, mel_set_instance):
-            mel_set_instance.listers.update(['masters', 'master_sizes'])
+        def getDefaulters(self, mel_set_instance, mel_key=''):
+            mel_set_instance.listers.update(['plugin_masters', 'master_sizes'])
 
         def load_mel(self, record, ins, sub_type, size_, *debug_strs):
-            __unpacker=structs_cache[u'Q'].unpack
-            if sub_type == b'MAST':
-                # Don't use ins.readString, because it will try to use
-                # bolt.pluginEncoding for the filename. This is one case where
-                # we want to use automatic encoding detection
-                master_name = decoder(bolt.cstrip(ins.read(size_, *debug_strs)),
-                                      avoidEncodings=(u'utf8', u'utf-8'))
-                record.masters.append(FName(master_name))
-            else: # sub_type == 'DATA'
-                # DATA is the size for TES3, but unknown/unused for later games
-                record.master_sizes.append(
-                    ins.unpack(__unpacker, size_, *debug_strs)[0])
+            self.loaders[sub_type].load_mel(record, ins, sub_type, size_,
+                                            *debug_strs)
 
         def dumpData(self,record,out):
             record._truncate_masters()
-            for master_name, master_size in zip(record.masters,
+            for master_name, master_size in zip(record.plugin_masters,
                                                 record.master_sizes):
-                MelUnicode(b'MAST', '').packSub(out, ChardetStr(
-                    master_name.encode(u'cp1252')), force_encoding=u'cp1252')
-                MelBase(b'DATA', '').packSub(
-                    out, struct_pack(u'Q', master_size))
+                self.loaders[b'MAST'].packSub(out, master_name)
+                self.loaders[b'DATA'].packSub(out, master_size)
 
     class MelAuthor(MelString):
         _wrapper_bytes_type = _AuthorStr
@@ -275,6 +272,9 @@ class AMreHeader(MelRecord):
         #  their size and then store that
         num_masters = self.num_masters
         num_sizes = len(self.master_sizes)
+        if num_masters != num_sizes:
+            bolt.deprint(f'Masters sizes array mismatch - masters '
+                         f'{num_masters}, master sizes {num_sizes}')
         # Just in case, truncate or pad the sizes with zeroes as needed
         self.master_sizes = self.master_sizes[:num_masters] + [0] * (
                 num_masters - num_sizes) # [] * (-n) == []
@@ -286,7 +286,21 @@ class AMreHeader(MelRecord):
         return self.nextObject - 1
 
     @property
-    def num_masters(self): return len(self.masters)
+    def masters(self):
+        return self.plugin_masters
+
+    @masters.setter
+    def masters(self, new_masters):
+        # TODO below must be per plugin or use bolt.PluginEncoding or... -> note we dump in cp1252
+        self.plugin_masters = [
+            ChardetStr.from_basestring(x.s if isinstance(x, bolt.Path) else x)
+            for x in new_masters]
+        # TODO(inf) For Morrowind, this will have to query the files for
+        #  their size and then store that
+        self.master_sizes = [0 for x in range(len(new_masters))]
+
+    @property
+    def num_masters(self): return len(self.plugin_masters)
 
 #------------------------------------------------------------------------------
 class AMreImad(MelRecord):
@@ -709,7 +723,7 @@ class MreGlob(MelRecord):
 
     melSet = MelSet(
         MelEdid(),
-        MelFixedString(b'FNAM', 'global_format', 1),
+        MelFixedString(b'FNAM', 'global_format'),
         # Rather stupidly all values, despite their designation (short, long,
         # float, bool (FO4)), are stored as floats - which means that very
         # large integers lose precision

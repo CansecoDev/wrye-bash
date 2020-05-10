@@ -29,8 +29,8 @@ from contextlib import suppress
 from itertools import chain
 
 from .. import bolt
-from ..bolt import Flags, attrgetter_cache, cstrip, decoder, flag, \
-    structs_cache
+from ..bolt import Flags, attrgetter_cache, flag, structs_cache, PluginStr, \
+    ChardetStr
 from ..exception import StateError
 
 # no local imports, imported everywhere in brec
@@ -307,34 +307,29 @@ DUMMY_FID = _DummyFid(0)
 # Random stuff ----------------------------------------------------------------
 int_unpacker = structs_cache['I'].unpack
 
-class FixedString(str):
+class FixedString(PluginStr):
+    # TODO(ut): can we get rid of the "actions"
+    #  API in MelStruct? As it is I can't use MelString for those -> no mel_sig
     """An action for MelStructs that will decode and encode a fixed-length
     string. Note that you do not need to specify defaults when using this."""
-    __slots__ = ('str_length',)
-    _str_encoding = bolt.pluginEncoding
 
-    def __new__(cls, str_length, target_str: str | bytes = ''):
-        if isinstance(target_str, str):
-            decoded_str = target_str
-        else:
-            decoded_str = '\n'.join(
-                decoder(x, cls._str_encoding, avoidEncodings=('utf8', 'utf-8'))
-                for x in cstrip(target_str).split(b'\n'))
-        new_str = super(FixedString, cls).__new__(cls, decoded_str)
+    def __new__(cls, target_str=b'', str_length=1):
+        new_str = super(FixedString, cls).__new__(cls, target_str)
         new_str.str_length = str_length
         return new_str
 
+    # "actions" "API" - avoid!
     def __call__(self, new_str):
         # 0 is the default, so replace it with whatever we currently have
-        return self.__class__(self.str_length, new_str or str(self))
+        return self.__class__(new_str or self, str_length=self.str_length)
 
     def dump(self):
-        return bolt.encode_complex_string(self, max_size=self.str_length,
-                                          min_size=self.str_length)
+        # FIXME: .reencode(self.preferred_encoding ?? see also AutoFixedString
+        return super().reencode(bolt.pluginEncoding, maxSize=self.str_length,
+                                minSize=self.str_length)
 
-class AutoFixedString(FixedString):
+class AutoFixedString(FixedString, ChardetStr):
     """Variant of FixedString that uses chardet to detect encodings."""
-    _str_encoding = None
 
 # Common flags ----------------------------------------------------------------
 class NotPlayableFlag:
