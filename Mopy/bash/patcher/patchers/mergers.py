@@ -133,7 +133,7 @@ class _AMerger(ImportPatcher):
             en_key = self._entry_key
             # Determine the effective master entries. First, find the winning
             # master entries (as determined by rule of one)
-            for master in modFile.tes4.masters:
+            for master in modFile.tes4.masters_paths:
                 if master in mod_id_entries:
                     id_entries.update(mod_id_entries[master])
             # Then, apply all deltas that originate from masters of this source
@@ -734,7 +734,7 @@ class _AListsMerger(ListPatcher):
                     if is_delev:
                         id_master_items = self.masterItems.get(rid)
                         if id_master_items:
-                            for de_master in modFile.tes4.masters:
+                            for de_master in modFile.tes4.masters_paths:
                                 if de_master in id_master_items:
                                     delevs |= id_master_items[de_master]
                             # TODO(inf) Double-check that this works correctly,

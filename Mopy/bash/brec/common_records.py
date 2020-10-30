@@ -40,8 +40,8 @@ from .common_subrecords import MelBounds, MelColor, MelColorInterpolator, \
 from .record_structs import MelRecord, MelSet
 from .utils_constants import FID, FormId, NotPlayableFlag, gen_coed_key
 from .. import bolt, exception
-from ..bolt import Flags, flag, sig_to_str, to_unix_newlines, \
-    to_win_newlines, ChardetStr, StripNewlines
+from ..bolt import Flags, flag, sig_to_str, to_unix_newlines, to_win_newlines, \
+    ChardetStr, StripNewlines, FName
 
 #------------------------------------------------------------------------------
 # Mixins ----------------------------------------------------------------------
@@ -301,6 +301,10 @@ class AMreHeader(MelRecord):
 
     @property
     def num_masters(self): return len(self.plugin_masters)
+
+    @property
+    def masters_paths(self): # TODO: drop!
+        return [FName('%s' % x) for x in self.masters]
 
 #------------------------------------------------------------------------------
 class AMreImad(MelRecord):
