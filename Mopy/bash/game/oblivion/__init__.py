@@ -91,7 +91,7 @@ class OblivionGameInfo(PatchGame):
         ver_files = [u'obse_loader.exe', u'obse_steam_loader.dll',
                      u'obse_1_2_416.dll']
         plugin_dir = u'OBSE'
-        cosave_tag = u'OBSE'
+        cosave_tag = b'OBSE'
         cosave_ext = u'.obse'
         url = u'http://obse.silverlock.org/'
         url_tip = u'http://obse.silverlock.org/'
