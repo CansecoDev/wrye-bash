@@ -200,7 +200,15 @@ class FileInfo(AFile, ListInfo):
             for x in masters_bytestrings:
                 if x.preferred_encoding not in good_encodings:
                     # we fell back  to some other encoding to decode - check if
-                    # it's encodable in cp1252 # TODO: will mangle it probably
+                    # it's encodable in cp1252 # TODO: can it mangle it?
+                    # x._decoded == u'Blood Raven - ä, ö, ü.esp'
+                    # pycharm blows with UnicodeEncodeError: 'ascii' codec can't encode character u'\xe4' in position 30: ordinal not in range(128)
+                    # on evaluate Expression - although I copied this from its x._decoded evaluation - Blood Raven - ä, ö, ü.esp
+                    # x._decoded.encode('cp1252') + b'\0' == x True!
+                    # x._decoded.encode('ISO-8859-1') + b'\0' == x True!
+                    # x.preferred_encoding == 'ISO-8859-1' note it's str!!!
+                    # decoder(x, returnEncoding=True) == (u'Blood Raven - \xe4, \xf6, \xfc.esp\x00', 'ISO-8859-1')
+                    # decoder(x, encoding=u'cp1252',returnEncoding=True) == (u'Blood Raven - \xe4, \xf6, \xfc.esp\x00', u'cp1252')
                     x._decoded.encode(u'cp1252')
             self.has_unicode_masters = False
         except UnicodeEncodeError:
