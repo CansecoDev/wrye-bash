@@ -132,7 +132,7 @@ class PCFaces(object):
                       'baseSpell', 'fatigue', 'attributes', 'iclass'):
                 setattr(face, a, getattr(npc, a))
             face.gender = (0,1)[npc.flags.female]
-            face.pcName = npc.full
+            face.pcName = npc.full ##: FIXME is this a str??
             #--Changed NPC Record
             PCFaces.save_getChangedNpc(saveFile, rfid, face)
         return faces
