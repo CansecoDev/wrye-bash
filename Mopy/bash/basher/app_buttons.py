@@ -83,6 +83,7 @@ class StatusBar_Button(ItemLink):
 
     def SetBitmapButton(self, window, image=None, onRClick=None):
         """Create and return gui button - you must define imageKey - WIP overrides"""
+        if not self.IsPresent(): return
         btn_image = image or balt.images[self.imageKey % bass.settings[
             u'bash.statusbar.iconSize']].get_bitmap()
         if self.gButton is not None:
@@ -148,8 +149,8 @@ class _App_Button(StatusBar_Button):
         if self._obseTip is None: return None
         return self._obseTip % {'app_version': self.version}
 
-    def __init__(self, exePath, exeArgs, images, tip, obseTip=None, uid=None,
-                 canHide=True):
+    def __init__(self, exePath, exeArgs, images, tip, *, obseTip=None,
+                 uid=None, canHide=True):
         """images: [16x16,24x24,32x32] images"""
         super(_App_Button, self).__init__(uid, canHide, tip)
         self.exeArgs = exeArgs
@@ -166,7 +167,6 @@ class _App_Button(StatusBar_Button):
                self.exePath.exists()
 
     def SetBitmapButton(self, window, image=None, onRClick=None):
-        if not self.IsPresent(): return
         iconSize = bass.settings[u'bash.statusbar.iconSize'] # 16, 24, 32
         idex = (iconSize // 8) - 2 # 0, 1, 2, duh
         super().SetBitmapButton(window, self.images[idex].get_bitmap(),
@@ -182,9 +182,9 @@ class _App_Button(StatusBar_Button):
                 'launched_exe_path': self.exePath} + '\n' + _(
                 'Used Arguments: %(launched_exe_args)s') % {
                        'launched_exe_args': self.exeArgs})
-        showError(Link.Frame, msg,
-                  title=_("Could Not Launch '%(launched_exe_name)s'") % {
-                'launched_exe_name': self.exePath.stail})
+        error_title = _("Could Not Launch '%(launched_exe_name)s'") % {
+            'launched_exe_name': self.exePath.stail}
+        showError(Link.Frame, msg, title=error_title)
 
     def _showUnicodeError(self):
         self.ShowError(msg=_('Execution failed because one or more of the '
@@ -269,25 +269,21 @@ class _ExeButton(_App_Button):
 
 class _JavaButton(_App_Button):
     """_App_Button pointing to a .jar file."""
+    _java = getJava()
 
     @property
     def version(self): return u''
 
-    def __init__(self, exePath, exeArgs, *args, **kwargs):
-        super(_JavaButton, self).__init__(exePath, exeArgs, *args, **kwargs)
-        self.java = getJava()
-        self.appArgs = u''.join(self.exeArgs)
-
     def IsPresent(self):
-        return self.java.exists() and self.exePath.exists()
+        return self._java.exists() and self.exePath.exists()
 
     def _app_button_execute(self):
         cwd = bolt.Path.getcwd()
         self.exePath.head.setcwd()
         try:
-            subprocess.Popen(
-                (self.java.stail, u'-jar', self.exePath.stail, self.appArgs),
-                executable=self.java.s, close_fds=True)
+            subprocess.Popen((self._java.stail, '-jar', self.exePath.stail,
+                              ''.join(self.exeArgs)), executable=self._java.s,
+                             close_fds=True)
         except UnicodeError:
             self._showUnicodeError()
         except Exception as error:
@@ -620,11 +616,9 @@ class _StatefulButton(StatusBar_Button):
 
     def SetState(self, state=None):
         """Set state related info. If newState != None, sets to new state
-        first. For convenience, returns state when done."""
-        if state is None: #--Default
-            self.button_state = self.button_state
-        elif state == -1: #--Invert
-            self.button_state = True ^ self.button_state
+        first."""
+        if state is None: state = self.button_state
+        self.button_state = True ^ self.button_state if state == -1 else state
         if self.gButton:
             self.gButton.image = balt.images[self.imageKey % bass.settings[
                 u'bash.statusbar.iconSize']].get_bitmap()
@@ -669,7 +663,6 @@ class Obse_Button(_StatefulButton):
     def SetState(self,state=None):
         super().SetState(state)
         self.UpdateToolTips()
-        return state
 
     @property
     def sb_button_tip(self):

@@ -4044,9 +4044,12 @@ class BashStatusBar(DnDStatusBar):
     def UnhideButton(self, link, skip_refresh=False):
         uid = link.uid
         settings[u'bash.statusbar.hide'].discard(uid)
+        if gButton := link.gButton:
+            gButton.visible = True
+        else:
+            self._addButton(link)
         # Find the position to insert it at
         order = settings[u'bash.statusbar.order']
-        self._addButton(link)
         if uid not in order:
             # Not specified, put it at the end
             order.append(uid)

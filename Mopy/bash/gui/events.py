@@ -216,7 +216,7 @@ class EventHandler(object):
             self._listeners.remove(listener)
         except ValueError:
             raise UnknownListener(
-                u'Listener %s not subscribed on %r' % (listener, self))
+                f'Listener {listener} not subscribed on {self!r}')
         self._update_wx_binding()
 
     def pause_subscription(self, listener):
