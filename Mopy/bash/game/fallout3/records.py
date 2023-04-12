@@ -42,20 +42,20 @@ from ...brec import FID, AMelItems, AMelLLItems, AMreActor, AMreCell, \
     MelIpctSounds, MelIpctTextureSets, MelLandShared, MelLighFade, MelLists, \
     MelLLChanceNone, MelLLFlags, MelLLGlobal, MelLscrLocations, \
     MelLtexGrasses, MelLtexSnam, MelMapMarker, MelMODS, MelNodeIndex, \
-    MelNull, MelObject, MelOwnership, MelPartialCounter, \
-    MelPerkData, MelPerkParamsGroups, MelRace, MelRaceData, MelRaceParts, \
-    MelRaceVoices, MelReadOnly, MelRecord, MelRef3D, MelReferences, \
-    MelReflectedRefractedBy, MelRefScale, MelRegions, MelRegnEntrySubrecord, \
-    MelRelations, MelScript, MelScriptVars, MelSequential, MelSet, \
-    MelShortName, MelSimpleArray, MelSInt8, MelSInt16, MelSInt32, \
-    MelSkipInterior, MelSorted, MelSound, MelSoundActivation, MelSoundClose, \
-    MelSoundLooping, MelSoundPickupDrop, MelSpells, MelString, MelStruct, \
-    MelTruncatedStruct, MelTxstFlags, MelUInt8, MelUInt8Flags, MelUInt16, \
-    MelUInt16Flags, MelUInt32, MelUInt32Flags, MelUnion, MelUnorderedGroups, \
-    MelValueWeight, MelWaterType, MelWeight, MelWorldBounds, MelWthrColors, \
-    MelXlod, NavMeshFlags, PartialLoadDecider, PerkEpdfDecider, SizeDecider, \
-    SpellFlags, VWDFlag, gen_color, gen_color3, null2, perk_distributor, \
-    perk_effect_key, MelLinkColors, MelModelCompare
+    MelNull, MelObject, MelOwnership, MelPartialCounter, MelPerkData, \
+    MelPerkParamsGroups, MelPostMast, MelPostMastA, MelRace, MelRaceData, \
+    MelRaceParts, MelRaceVoices, MelReadOnly, MelRecord, MelRef3D, \
+    MelReferences, MelReflectedRefractedBy, MelRefScale, MelRegions, \
+    MelRegnEntrySubrecord, MelRelations, MelScript, MelScriptVars, \
+    MelSequential, MelSet, MelShortName, MelSimpleArray, MelSInt8, MelSInt16, \
+    MelSInt32, MelSkipInterior, MelSorted, MelSound, MelSoundActivation, \
+    MelSoundClose, MelSoundLooping, MelSoundPickupDrop, MelSpells, MelString, \
+    MelStruct, MelTruncatedStruct, MelTxstFlags, MelUInt8, MelUInt8Flags, \
+    MelUInt16, MelUInt16Flags, MelUInt32, MelUInt32Flags, MelUnion, \
+    MelUnorderedGroups, MelValueWeight, MelWaterType, MelWeight, \
+    MelWorldBounds, MelWthrColors, MelXlod, NavMeshFlags, PartialLoadDecider, \
+    PerkEpdfDecider, SizeDecider, SpellFlags, VWDFlag, gen_color, gen_color3, \
+    null2, perk_distributor, perk_effect_key, MelLinkColors, MelModelCompare
 from ...exception import ModSizeError
 
 _is_fnv = bush.game.fsName == 'FalloutNV'
@@ -334,7 +334,6 @@ class MelSoundRandomLooping(MelFid):
 class MreTes4(AMreHeader):
     """TES4 Record.  File header."""
     rec_sig = b'TES4'
-    _post_masters_sigs = {b'ONAM', b'SCRN'}
 
     melSet = MelSet(
         MelStruct(b'HEDR', ['f', '2I'], ('version', 0.94), 'numRecords',
@@ -344,8 +343,8 @@ class MreTes4(AMreHeader):
         AMreHeader.MelAuthor(),
         AMreHeader.MelDescription(),
         AMreHeader.MelMasterNames(),
-        MelSimpleArray('overrides', MelFid(b'ONAM')),
-        MelBase(b'SCRN', 'screenshot'),
+        MelPostMastA('overrides', MelFid(b'ONAM')),
+        MelPostMast(b'SCRN', 'screenshot'),
     )
 
 #------------------------------------------------------------------------------
