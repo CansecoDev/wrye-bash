@@ -737,6 +737,15 @@ class MelStruct(MelBase):
     def hasFids(self,formElements):
         if self.formAttrs: formElements.add(self)
 
+    def set_mel_struct_defaults(self, mel_obj):
+        """Only used in get_mel_object_for_group - don't use."""
+        for att, val in zip(self.attrs, self.defaults):
+            setattr(mel_obj, att, val)
+        for dex in self._action_dexes:
+            act = self.actions[dex]
+            if act is not FID: # copy the flags so we won't edit the default
+                setattr(mel_obj, self.attrs[dex], act(self.defaults[dex]))
+
     def getDefaulters(self, mel_set_instance, __nones=repeat(None)):
         defaultrs = mel_set_instance.defaulters
         vals = self.defaults if self._is_required else __nones

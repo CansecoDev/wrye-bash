@@ -165,13 +165,12 @@ class CoblExhaustionPatcher(_ExSpecialList):
             effect = record.get_mel_object_for_group('effects')
             effect.effect_sig = b'SEFF'
             effect.duration = duration
-            scriptEffect = effect.scriptEffect
-            scriptEffect.full = u'Power Exhaustion'
-            scriptEffect.script_fid = self._exhaust_fid
-            scriptEffect.school = 2
-            scriptEffect.visual = null4
-            scriptEffect.flags.hostile = False
-            effect.scriptEffect = scriptEffect
+            se = record.get_mel_object_for_group('effects.scriptEffect')
+            se.full = 'Power Exhaustion'
+            se.script_fid = self._exhaust_fid
+            se.school = 2
+            se.flags.hostile = False
+            effect.scriptEffect = se
             record.effects.append(effect)
             keep(rid, record)
             count[rid.mod_fn] += 1
@@ -253,8 +252,7 @@ class MorphFactionsPatcher(_ExSpecialList):
                     if not rank.male_title: rank.male_title = rankName
                     if not rank.female_title: rank.female_title = rankName
                     if not rank.insignia_path:
-                        # if rank_level was not present it will be None
-                        dds_ = f'generic{rank.rank_level or 0:02d}.dds'
+                        dds_ = f'generic{rank.rank_level:02d}.dds'
                         rank.insignia_path = rf'Menus\Stats\Cobl\{dds_}'
                 keep(rid, record)
                 changes_counts[rid.mod_fn] += 1

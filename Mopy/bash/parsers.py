@@ -501,14 +501,6 @@ class ActorFactions(_AParser):
             raise NotImplementedError
         return {f.faction: f.rank for f in record.factions} # last mod wins
 
-    @classmethod
-    def get_empty_object(cls, record, faction_fid):
-        """We also need to set the (by default None) unused1 MelStruct
-        element."""
-        target_entry = super().get_empty_object(record, faction_fid)
-        target_entry.unused1 = b'ODB' ##: in Oblivion.esm I get {b'NL\x00', b'IFZ', None}
-        return target_entry
-
     def _update_from_csv(self, top_grup_sig, csv_fields, index_dict=None):
         lfid = self._coerce_fid(csv_fields[5], csv_fields[6])
         rank = int(csv_fields[7])

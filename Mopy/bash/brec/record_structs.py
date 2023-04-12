@@ -526,10 +526,14 @@ class MelRecord(MreRecord, GetAttrer):
             cls.melSet.check_duplicate_attrs(cls.rec_sig)
 
     @classmethod
-    def get_mel_object_for_group(cls, attr):
-        """Returns default instance of specified instance. Only useful for
-        MelGroup and MelGroups."""
-        return cls.melSet.mel_providers_dict[attr]()
+    def get_mel_object_for_group(cls, att):
+        """Create a MelObject instance and set default values. Only useful
+        for MelGroup and MelGroups. Create records usecase - no new uses!"""
+        mel_obj = cls.melSet.mel_providers_dict[att]()
+        for el in mel_obj.melSet.elements:
+            if hasattr(el, 'defaults'):  # a MelStruct
+                el.set_mel_struct_defaults(mel_obj)
+        return mel_obj
 
     def loadData(self, ins, endPos, *, file_offset=0):
         """Loads data from input stream."""

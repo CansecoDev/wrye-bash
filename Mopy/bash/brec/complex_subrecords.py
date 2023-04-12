@@ -406,6 +406,13 @@ class _MelMgefCode(MelStruct):
         self._mgef_int_attr = f'_{mgef_code_attr}_as_int'
         self._emulated_attr = emulated_attr
 
+    def getDefaulters(self, mel_set_instance):
+        super().getDefaulters(mel_set_instance)
+        req = self._is_required
+        if self._emulated_attr:
+            mel_set_instance.defaulters[self._emulated_attr] = req and ''
+        mel_set_instance.defaulters[self._mgef_int_attr] = req and 0
+
     def load_mel(self, record, ins, sub_type, size_, *debug_strs):
         super().load_mel(record, ins, sub_type, size_, *debug_strs)
         mgef_code = getattr(record, self._mgef_code_attr)
@@ -472,22 +479,19 @@ class MelEffectsTes4(MelSequential):
     def __init__(self):
         # Vanilla Elements ----------------------------------------------------
         self._vanilla_elements = [
-            # Structs put to required as we create effects/scriptEffect -
-            # maybe rework to assign attributes on the spot
             MelGroups('effects',
-                # REHE is Restore target's Health - EFID.effect_sig
-                # must be the same as EFIT.effect_sig. No need for _MelMgefCode
-                # here because we know we don't have OBME on this record
-                MelStruct(b'EFID', ['4s'], ('effect_sig', b'REHE'),
-                          is_required=True),
-                MelStruct(b'EFIT', ['4s', '4I', 'i'], ('effect_sig', b'REHE'),
-                    'magnitude', 'area', 'duration', 'recipient',
-                    'actorValue', is_required=True),
+                # EFID.effect_sig must be the same as EFIT.effect_sig. No need
+                # for _MelMgefCode here because we know we don't have OBME on
+                # this record
+                MelStruct(b'EFID', ['4s'], 'effect_sig'),
+                MelStruct(b'EFIT', ['4s', '4I', 'i'], 'effect_sig',
+                          'magnitude', 'area', 'duration', 'recipient',
+                          'actorValue'),
                 MelGroup('scriptEffect',
                     _MelEffectsScit(b'SCIT', ['2I', '4s', 'B', '3s'],
                         (FID, 'script_fid'), 'school', 'visual',
                         (self.se_flags, 'flags'), 'unused1',
-                        old_versions={'2I4s', 'I'}, is_required=True),
+                        old_versions={'2I4s', 'I'}),
                     MelFull(),
                 ),
             ),
@@ -498,7 +502,7 @@ class MelEffectsTes4(MelSequential):
                 MelObme(b'EFME', extra_format=['2B'],
                     extra_contents=['efit_param_info', 'efix_param_info'],
                     reserved_byte_count=10),
-                _MelMgefCode(b'EFID', ['4s'], ('effect_sig', b'REHE'),
+                _MelMgefCode(b'EFID', ['4s'], 'effect_sig',
                     mgef_code_attr='effect_sig'),
                 MelUnion({
                     0: MelStruct(b'EFIT', ['4s', '4I', '4s'], 'unused_name',
@@ -510,7 +514,7 @@ class MelEffectsTes4(MelSequential):
                         (FID, 'efit_param')),
                     2: _MelMgefCode(b'EFIT', ['4s', '4I', '4s'], 'unused_name',
                         'magnitude', 'area', 'duration', 'recipient',
-                        ('efit_param', b'REHE'), mgef_code_attr='efit_param'),
+                        'efit_param', mgef_code_attr='efit_param'),
                 }, decider=AttrValDecider('efit_param_info')),
                 _MelObmeScitGroup('scriptEffect',
                     ##: Test! xEdit has all this in EFIX, but it also
@@ -524,8 +528,8 @@ class MelEffectsTes4(MelSequential):
                         (1, 3): MelStruct(b'SCIT', ['2I', '4s', 'B', '3s'],
                             (FID, 'efix_param'), 'school', 'visual', se_fl,
                             'unused1'),
-                        2: _MelMgefCode(b'SCIT', ['4s', 'I', '4s', 'B', '3s'],
-                            ('efix_param', b'REHE'), 'school', 'visual', se_fl,
+                        2: _MelMgefCodeScit(b'SCIT', ['4s','I','4s','B','3s'],
+                            'efix_param', 'school', 'visual', se_fl,
                             'unused1', mgef_code_attr='efix_param'),
                     }, decider=AttrValDecider('efix_param_info')),
                     MelFull(),

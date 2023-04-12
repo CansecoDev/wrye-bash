@@ -403,8 +403,6 @@ class MreHasEffects(MelRecord):
             if seschool:
                 seschool = schoolTypeName_Number.get(seschool.lower(),
                                                      int_or_zero(seschool))
-            seflags = MelEffectsTes4.se_flags(0)
-            seflags.hostile = se_hostile.lower() == 'true'
             sename = str_or_none(sename)
             if None in (seschool, sename):
                 continue
@@ -423,7 +421,7 @@ class MreHasEffects(MelRecord):
                 sevisuals = __packer(sevisuals)
             sevisual = sevisuals
             se.visual = sevisual
-            se.flags = seflags
+            se.flags.hostile = se_hostile.lower() == 'true'
         return effects_list
 
     @classmethod
@@ -1900,6 +1898,16 @@ class MreQust(_ObIcon):
 
     def can_set_icon(self):
         return self.stages and super().can_set_icon()
+
+    @classmethod
+    def get_mel_object_for_group(cls, att):
+        mel_obj = super().get_mel_object_for_group(att)
+        # Gentile or Jew, remember this, and *forget about* using
+        # get_mel_object_for_group
+        mel_struct = cls.melSet.elements[5].elements[0].element_mapping[
+            b'CTDA']._ctda_mel
+        mel_struct.set_mel_struct_defaults(mel_obj)
+        return mel_obj
 
 #------------------------------------------------------------------------------
 class MreRace(AMreRace):
