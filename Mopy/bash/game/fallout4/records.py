@@ -46,10 +46,10 @@ from ...brec import FID, AMelItems, AMelLLItems, AMelNvnm, AMelVmad, \
     MelLensShared, MelLighFade, MelLighLensFlare, MelLLChanceNone, \
     MelLLFlags, MelLLGlobal, MelLscrCameraPath, MelLscrNif, MelLscrRotation, \
     MelLString, MelLtexGrasses, MelLtexSnam, MelMatoPropertyData, \
-    MelMattShared, MelNextPerk, MelNodeIndex, MelNull, \
-    MelObjectTemplate, MelPartialCounter, MelPerkData, \
-    MelPerkParamsGroups, MelRace, MelRandomTeleports, MelReadOnly, MelRecord, \
-    MelRelations, MelSeasons, MelSequential, MelSet, MelShortName, \
+    MelMattShared, MelNextPerk, MelNodeIndex, MelNull, MelObjectTemplate, \
+    MelPartialCounter, MelPerkData, MelPerkParamsGroups, MelPostMast, \
+    MelPostMastA, MelPostMastI, MelRace, MelRandomTeleports, MelReadOnly, \
+    MelRecord, MelRelations, MelSeasons, MelSequential, MelSet, MelShortName, \
     MelSimpleArray, MelSInt8, MelSInt32, MelSorted, MelSound, \
     MelSoundActivation, MelSoundClose, MelSoundLooping, MelSoundPickupDrop, \
     MelString, MelStruct, MelTemplateArmor, MelTruncatedStruct, MelUInt8, \
@@ -297,7 +297,6 @@ class MelVmad(AMelVmad):
 class MreTes4(AMreHeader):
     """TES4 Record.  File header."""
     rec_sig = b'TES4'
-    _post_masters_sigs = {b'ONAM', b'SCRN', b'TNAM', b'INTV', b'INCC'}
 
     class HeaderFlags(AMreHeader.HeaderFlags):
         localized: bool = flag(7)
@@ -311,14 +310,14 @@ class MreTes4(AMreHeader):
         AMreHeader.MelAuthor(),
         AMreHeader.MelDescription(),
         AMreHeader.MelMasterNames(),
-        MelSimpleArray('overrides', MelFid(b'ONAM')),
-        MelBase(b'SCRN', 'screenshot'),
+        MelPostMastA('overrides', MelFid(b'ONAM')),
+        MelPostMast(b'SCRN', 'screenshot'),
         MelGroups('transient_types',
-            MelSimpleArray('unknownTNAM', MelFid(b'TNAM'),
+            MelPostMastA('unknownTNAM', MelFid(b'TNAM'),
                 prelude=MelUInt32(b'TNAM', 'form_type')),
         ),
-        MelUInt32(b'INTV', 'unknownINTV'),
-        MelUInt32(b'INCC', 'internal_cell_count'),
+        MelPostMastI(b'INTV', 'unknownINTV'),
+        MelPostMastI(b'INCC', 'internal_cell_count'),
     )
 
 #------------------------------------------------------------------------------

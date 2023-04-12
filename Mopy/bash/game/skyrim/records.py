@@ -51,8 +51,8 @@ from ...brec import FID, AMelItems, AMelLLItems, AMelNvnm, AMelVmad, \
     MelLLChanceNone, MelLLFlags, MelLLGlobal, MelLscrCameraPath, MelLscrNif, \
     MelLscrRotation, MelLString, MelLtexGrasses, MelLtexSnam, MelMapMarker, \
     MelMatoPropertyData, MelMattShared, MelMdob, MelMODS, MelNextPerk, \
-    MelNodeIndex, MelNull, MelOwnership, MelPartialCounter, \
-    MelPerkData, MelPerkParamsGroups, MelRace, MelRaceData, \
+    MelNodeIndex, MelNull, MelOwnership, MelPartialCounter, MelPerkData, \
+    MelPerkParamsGroups, MelPostMast, MelPostMastA, MelRace, MelRaceData, \
     MelRandomTeleports, MelReadOnly, MelRecord, MelRef3D, \
     MelReflectedRefractedBy, MelRefScale, MelRegions, MelRegnEntrySubrecord, \
     MelRelations, MelSeasons, MelSequential, MelSet, MelShortName, \
@@ -451,7 +451,6 @@ class MelWaterVelocities(MelSequential):
 class MreTes4(AMreHeader):
     """TES4 Record.  File header."""
     rec_sig = b'TES4'
-    _post_masters_sigs = {b'SCRN', b'INTV', b'INCC', b'ONAM'}
 
     class HeaderFlags(AMreHeader.HeaderFlags):
         localized: bool = flag(7)
@@ -465,10 +464,10 @@ class MreTes4(AMreHeader):
         AMreHeader.MelAuthor(),
         AMreHeader.MelDescription(),
         AMreHeader.MelMasterNames(),
-        MelSimpleArray('overrides', MelFid(b'ONAM')),
-        MelBase(b'SCRN', 'screenshot'),
-        MelBase(b'INTV', 'unknownINTV'),
-        MelBase(b'INCC', 'unknownINCC'),
+        MelPostMastA('overrides', MelFid(b'ONAM')),
+        MelPostMast(b'SCRN', 'screenshot'),
+        MelPostMast(b'INTV', 'unknownINTV'),
+        MelPostMast(b'INCC', 'unknownINCC'),
     )
 
 #------------------------------------------------------------------------------

@@ -26,9 +26,9 @@ from ...bolt import Flags, flag
 from ...brec import FID, AMreHeader, MelBase, MelBounds, MelConditionsFo3, \
     MelDescription, MelEdid, MelFid, MelFids, MelFloat, MelFull, MelGroups, \
     MelIco2, MelIcon, MelIcons, MelNull, MelRecord, MelScript, MelSet, \
-    MelSimpleArray, MelSInt32, MelSorted, MelSoundPickupDrop, MelString, \
+    MelPostMastA, MelSInt32, MelSorted, MelSoundPickupDrop, MelString, \
     MelStruct, MelTruncatedStruct, MelUInt8, MelUInt8Flags, MelUInt32, \
-    MelValueWeight
+    MelValueWeight, MelPostMast
 
 #------------------------------------------------------------------------------
 # FalloutNV Records -----------------------------------------------------------
@@ -36,7 +36,6 @@ from ...brec import FID, AMreHeader, MelBase, MelBounds, MelConditionsFo3, \
 class MreTes4(AMreHeader):
     """TES4 Record.  File header."""
     rec_sig = b'TES4'
-    _post_masters_sigs = {b'ONAM', b'SCRN'}
 
     melSet = MelSet(
         MelStruct(b'HEDR', ['f', '2I'], ('version', 1.34), 'numRecords',
@@ -46,8 +45,8 @@ class MreTes4(AMreHeader):
         AMreHeader.MelAuthor(),
         AMreHeader.MelDescription(),
         AMreHeader.MelMasterNames(),
-        MelSimpleArray('overrides', MelFid(b'ONAM')),
-        MelBase(b'SCRN', 'screenshot'),
+        MelPostMastA('overrides', MelFid(b'ONAM')),
+        MelPostMast(b'SCRN', 'screenshot'),
     )
 
 #------------------------------------------------------------------------------

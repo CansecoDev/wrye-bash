@@ -31,7 +31,7 @@ __author__ = 'Infernio'
 import copy
 from itertools import chain
 
-from .basic_elements import MelBase, MelNull, MelNum, MelObject, \
+from .basic_elements import MelBase, MelNull, MelNum, MelObject, MelPostMast, \
     MelSequential, MelStruct
 from ..bolt import attrgetter_cache, deprint, structs_cache
 from ..exception import ArgumentError, ModSizeError
@@ -449,6 +449,8 @@ class MelSimpleArray(MelArray):
 
     def _pack_array_data(self, array_val):
         return b''.join(map(self._element.packer, array_val))
+
+class MelPostMastA(MelPostMast, MelSimpleArray): pass
 
 #------------------------------------------------------------------------------
 class MelTruncatedStruct(MelStruct):
