@@ -1151,13 +1151,6 @@ class _UsesEffectsMixin(_HandleAliases):
         for att, val in newStats.items():
             old_val = __attrgetters[att](record)
             if att == u'eid': old_eid = old_val
-            if att == 'effects':
-                # To avoid creating stupid noop edits due to the one unused
-                # field inside the SEFF struct, set the record's unused1 to
-                # three null bytes before comparing
-                for eff in old_val:
-                    if se := eff.scriptEffect:
-                        se.unused1 = null3
             if old_val != val:
                 imported = True
                 setattr_deep(record, att, val)
