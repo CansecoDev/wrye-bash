@@ -1678,8 +1678,7 @@ class Link(object):
 
     def _askYes(self, message, title='', default_is_yes=True,
                 questionIcon=False):
-        if not title: title = self._text
-        return askYes(self.window, message, title=title,
+        return askYes(self.window, message, title=title or self._text,
             default_is_yes=default_is_yes, question_icon=questionIcon)
 
     def _askContinue(self, message, continueKey, title=_('Warning'),
@@ -1691,16 +1690,14 @@ class Link(object):
         return askContinue(self.window, message, continueKey=None, title=title)
 
     def _showOk(self, message, title=u''):
-        if not title: title = self._text
-        return showOk(self.window, message, title)
+        return showOk(self.window, message, title or self._text)
 
     def _askWarning(self, message, title=_(u'Warning')):
         return askWarning(self.window, message, title)
 
     def _askText(self, message, title=u'', default=u'', strip=True):
-        if not title: title = self._text
-        return askText(self.window, message, title=title, default_txt=default,
-                       strip=strip)
+        return askText(self.window, message, title=title or self._text,
+                       default_txt=default, strip=strip)
 
     def _showError(self, message, title=_(u'Error')):
         return showError(self.window, message, title)
@@ -1718,8 +1715,8 @@ class Link(object):
     def _showWryeLog(self, logText, title='', asDialog=True,
                      lg_icons=_default_icons):
         if lg_icons is self._default_icons: lg_icons = Resources.bashBlue
-        if not title: title = self._text
-        WryeLog(self.window, logText, title, asDialog, log_icons=lg_icons)
+        WryeLog(self.window, logText, title or self._text, asDialog,
+                log_icons=lg_icons)
 
     def _askNumber(self, message, prompt='', title='', initial_num=0,
             min_num=0, max_num=10000):

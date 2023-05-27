@@ -88,15 +88,15 @@ class Installer(ListInfo):
                          'version[ _]?history'}
     re_common_docs = re.compile(f'^(.*)(?:{"|".join(_common_doc_roots)})(.*)$',
                                 re.I)
-    skipExts = {'.exe', '.py', '.pyc', '.7z', '.zip', '.rar', '.db', '.ace',
+    skipExts = ['.exe', '.py', '.pyc', '.7z', '.zip', '.rar', '.db', '.ace',
                 '.tgz', '.tar', '.gz', '.bz2', '.omod', '.fomod', '.tb2',
-                '.lzma', '.manifest', '.ckm', '.vortex_backup'}
-    skipExts.update(set(readExts))
+                '.lzma', '.manifest', '.ckm', '.vortex_backup', '.ghost']
+    skipExts = frozenset((*skipExts, *readExts))
     commonlyEditedExts = {'.cfg', '.ini', '.modgroups', '.toml', '.txt',
                           '.xml'}
     #--Regular game directories - needs update after bush.game has been set
-    dataDirsPlus = screenshot_dirs | bush.game.Bain.wrye_bash_data_dirs | {
-        'docs'}
+    dataDirsPlus = {*screenshot_dirs, *bush.game.Bain.wrye_bash_data_dirs,
+                    'docs'}
     # Files that may be installed in top Data/ directory - note that all
     # top-level file extensions commonly found in the wild need to go here,
     # even ones we'll end up skipping, since this is for the detection of
@@ -107,10 +107,10 @@ class Installer(ListInfo):
     # to allow top-level docs files in sub-packages, but we don't want them to
     # invalidate a type 2 package
     _top_files_plus_docs = _top_files_extensions | docExts
-    _re_top_extensions = re.compile(u'(?:' + u'|'.join(
-        re.escape(ext) for ext in _top_files_extensions) + u')$', re.I)
-    _re_top_plus_docs = re.compile('(?:' + '|'.join(
-        re.escape(ext) for ext in _top_files_plus_docs) + ')$', re.I)
+    _re_top_extensions = re.compile(
+        f'(?:{"|".join(map(re.escape, _top_files_extensions))})$', re.I)
+    _re_top_plus_docs = re.compile(
+        f'(?:{"|".join(map(re.escape, _top_files_plus_docs))})$', re.I)
     # Extensions of strings files - automatically built from game constants
     _strings_extensions = {os.path.splitext(x[1])[1].lower()
                            for x in bush.game.Esp.stringsFiles}
@@ -177,7 +177,7 @@ class Installer(ListInfo):
     def calc_crcs(pending, pending_size, rootName, new_sizeCrcDate, progress):
         if not pending: return
         done = 0
-        progress_msg= rootName + u'\n' + _(u'Calculating CRCs...') + u'\n'
+        progress_msg = f'{rootName}\n' + _('Calculating CRCs...') + '\n'
         progress(0, progress_msg)
         # each mod increments the progress bar by at least one, even if it
         # is size 0 - add len(pending) to the progress bar max to ensure we
@@ -395,7 +395,7 @@ class Installer(ListInfo):
     #--refreshDataSizeCrc, err, framework -------------------------------------
     # Those files/folders will be always skipped by refreshDataSizeCrc()
     _silentSkipsStart = (
-        u'--', u'omod conversion data' + os_sep, u'wizard images' + os_sep)
+        '--', f'omod conversion data{os_sep}', f'wizard images{os_sep}')
     _silentSkipsEnd = (u'thumbs.db', u'desktop.ini', u'meta.ini',
                        u'__folder_managed_by_vortex')
 
@@ -2209,9 +2209,9 @@ class InstallersData(DataStore):
         dirDirsFilesAppend, emptyDirsAdd = dirDirsFiles.append, emptyDirs.add
         relPos = len(mods_dir) + 1
         for asDir, sDirs, sFiles in os.walk(mods_dir):
-            progress(0.05, progress_msg + (u'\n%s' % asDir[relPos:]))
-            if not (sDirs or sFiles): emptyDirsAdd(GPath(asDir))
+            progress(0.05, f'{progress_msg}\n{asDir[relPos:]}')
             if asDir == mods_dir: InstallersData._skips_in_data_dir(sDirs)
+            elif not (sDirs or sFiles): emptyDirsAdd(GPath(asDir))
             dirDirsFilesAppend((asDir, sDirs, sFiles))
         progress(0, _(u'%s: Scanning...') % dirname)
         new_sizeCrcDate, pending, pending_size = \
@@ -2246,36 +2246,34 @@ class InstallersData(DataStore):
         pending, pending_size = bolt.LowerDict(), 0
         new_sizeCrcDate = bolt.LowerDict()
         oldGet = self.data_sizeCrcDate.get
-        ghost_norm_get = bolt.LowerDict(
-            (y, str(x)) for x, y in Installer.getGhosted().items()).get
         skipExts = Installer.skipExts
         relPos = len(bass.dirs[u'mods']) + 1
         for index, (asDir, __sDirs, sFiles) in enumerate(dirDirsFiles):
             progress(index)
-            rsDir = asDir[relPos:]
+            top_level = len(asDir) <= relPos # < should be enough
             for sFile in sFiles:
-                top_level_espm = False
-                if not rsDir:
-                    rpFile = ghost_norm_get(sFile, sFile)
-                    ext = rpFile[rpFile.rfind(u'.'):]
-                    if ext.lower() in skipExts: continue
-                    top_level_espm = ext in bush.game.espm_extensions
-                else: rpFile = os.path.join(rsDir, sFile)
-                asFile = os.path.join(asDir, sFile)
-                # below calls may now raise even if "werr.winerror = 123"
-                oSize, oCrc, oDate = oldGet(rpFile, (0, 0, 0.0))
-                if top_level_espm: # modInfos MUST BE UPDATED
+                if top_level:
+                    rpFile = sFile
+                    if (low := rpFile[rpFile.rfind('.'):].lower()) == '.ghost':
+                        rpFile = rpFile[:-6]
+                        low = rpFile[rpFile.rfind('.'):].lower()
+                    if low in skipExts: continue
+                    asFile = os.path.join(asDir, sFile)
                     try:
-                        modInfo = modInfos[str(rpFile)] # a CIstr
+                        modInfo = modInfos[rpFile]  # modInfos MUST BE UPDATED
                         new_sizeCrcDate[rpFile] = (modInfo.fsize,
-                           modInfo.cached_mod_crc(), modInfo.mtime, asFile)
+                            modInfo.cached_mod_crc(), modInfo.mtime, asFile)
                         continue
                     except KeyError:
-                        pass # corrupted/missing, let os.lstat decide
+                        pass  # corrupted/missing, let os.lstat decide
+                else:
+                    asFile = os.path.join(asDir, sFile)
+                    rpFile = asFile[relPos:]
                 try:
                     lstat = os.lstat(asFile)
                 except FileNotFoundError:
                     continue # file does not exist
+                oSize, oCrc, oDate = oldGet(rpFile) or (0, 0, 0.0)
                 lstat_size, date = lstat.st_size, lstat.st_mtime
                 if lstat_size != oSize or date != oDate:
                     pending[rpFile] = (lstat_size, oCrc, date, asFile)
@@ -2323,11 +2321,10 @@ class InstallersData(DataStore):
                     x.lower() not in bush.game.Bain.skip_bain_refresh)
         sDirs[:] = [x for x in newSDirs]
 
-    def update_data_SizeCrcDate(self, dest_paths, progress=None):
+    def update_data_SizeCrcDate(self, dest_paths: set[str], progress=None):
         """Update data_SizeCrcDate with info on given paths.
         :param progress: must be zeroed - message is used in _process_data_dir
-        :param dest_paths: set of paths relative to Data/ - may not exist.
-        :type dest_paths: set[str]"""
+        :param dest_paths: set of paths relative to Data/ - may not exist."""
         root_files = []
         norm_ghost_get = Installer.getGhosted().get
         for data_path in dest_paths:
@@ -2337,10 +2334,9 @@ class InstallersData(DataStore):
                 root_files.append((bass.dirs[u'mods'].s, data_path))
             else:
                 root_files.append((bass.dirs[u'mods'].join(sp[0]).s, sp[1]))
-        root_dirs_files = []
         root_files.sort(key=itemgetter(0)) # must sort on same key as groupby
-        for key, val in groupby(root_files, key=itemgetter(0)):
-            root_dirs_files.append((key, [], [j for i, j in val]))
+        root_dirs_files = [(key, [], [j for i, j in val]) for key, val in
+                           groupby(root_files, key=itemgetter(0))]
         progress = progress or bolt.Progress()
         new_sizeCrcDate, pending, pending_size = self._process_data_dir(
             root_dirs_files, progress)
@@ -2397,11 +2393,12 @@ class InstallersData(DataStore):
         InstallersData._externally_updated.clear()
         InstallersData._externally_deleted.clear()
         for abspath, tracked in list(InstallersData._miscTrackedFiles.items()):
-            if not abspath.exists(): # untrack - runs on first run !!
+            try:
+                if tracked.do_update(raise_on_error=True):
+                    altered.add(abspath)
+            except OSError: # untrack - runs on first run !!
                 InstallersData._miscTrackedFiles.pop(abspath, None)
                 deleted.add(abspath)
-            elif tracked.do_update():
-                altered.add(abspath)
         do_refresh = False
         for apath in altered | deleted:
             # the Data dir - will give correct relative path for both
@@ -2416,7 +2413,7 @@ class InstallersData(DataStore):
                 s, m = apath.size_mtime()
                 self.data_sizeCrcDate[path_key] = (s, apath.crc, m)
                 do_refresh = True
-        return do_refresh # Some tracked files changed, update installers status
+        return do_refresh #Some tracked files changed, update installers status
 
     #--Operations -------------------------------------------------------------
     def moveArchives(self,moveList,newPos):
