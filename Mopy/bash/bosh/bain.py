@@ -1173,9 +1173,6 @@ class Installer(ListInfo):
             proj_dir.makedirs()  #--In case it just got wiped out.
         return upt_numb, del_numb
 
-    def size_or_mtime_changed(self, apath):
-        return (self.fsize, self.file_mod_time) != apath.size_mtime()
-
     def open_readme(self): self._open_txt_file(self.hasReadme)
     def open_wizard(self): self._open_txt_file(self.hasWizard)
     def open_fomod_conf(self): self._open_txt_file(self.has_fomod_conf)
@@ -1370,7 +1367,7 @@ class InstallerMarker(Installer):
         return bolt.LowerDict()
 
 #------------------------------------------------------------------------------
-class InstallerArchive(Installer):
+class InstallerArchive(Installer, AFile):
     """Represents an archive installer entry."""
     __slots__ = tuple() #--No new slots
     type_string = _(u'Archive')
@@ -1587,7 +1584,7 @@ class InstallerArchive(Installer):
         return FName(self.fn_key.fn_body + archives.defaultExt)
 
 #------------------------------------------------------------------------------
-class InstallerProject(Installer):
+class InstallerProject(Installer, AFile):
     """Represents a directory/build installer entry."""
     __slots__ = tuple() #--No new slots
     type_string = _(u'Project')
@@ -1615,8 +1612,8 @@ class InstallerProject(Installer):
         apRoot = self.abs_path
         rootName = apRoot.stail
         progress = progress if progress else bolt.Progress()
-        progress_msg = rootName + u'\n' + _(u'Scanning...')
-        progress(0, progress_msg + u'\n')
+        progress_msg = f'{rootName}\n%s\n' % _('Scanning...')
+        progress(0, progress_msg)
         progress.setFull(1)
         asRoot = apRoot.s
         relPos = len(asRoot) + 1
@@ -1624,20 +1621,18 @@ class InstallerProject(Installer):
         pending, pending_size = bolt.LowerDict(), 0
         new_sizeCrcDate = bolt.LowerDict()
         oldGet = self.src_sizeCrcDate.get
-        walk = self._dir_dirs_files if self._dir_dirs_files is not None else os.walk(asRoot)
+        walk = os.walk(asRoot) if self._dir_dirs_files is None else self._dir_dirs_files
         for asDir, __sDirs, sFiles in walk:
-            rsDir = asDir[relPos:]
-            progress(0.05, progress_msg + (u'\n%s' % rsDir))
+            progress(0.05, f'{progress_msg}{asDir[relPos:]}')
             get_mtime = os.path.getmtime(asDir)
             max_mtime = max_mtime if max_mtime >= get_mtime else get_mtime
             for sFile in sFiles:
                 asFile = os.path.join(asDir, sFile)
-                rpFile = os.path.join(rsDir, sFile)
                 # below calls may now raise even if "werr.winerror = 123"
                 lstat = os.lstat(asFile)
                 st_size, date = lstat.st_size, lstat.st_mtime
                 max_mtime = max_mtime if max_mtime >= date else date
-                oSize, oCrc, oDate = oldGet(rpFile, (0, 0, 0))
+                oSize, oCrc, oDate = oldGet(rpFile := asFile[relPos:]) or (0, 0, 0)
                 if st_size == oSize and date == oDate:
                     new_sizeCrcDate[rpFile] = (oSize, oCrc, oDate, asFile)
                 else:
@@ -1649,7 +1644,7 @@ class InstallerProject(Installer):
         #--Done
         return max_mtime
 
-    def size_or_mtime_changed(self, apath, _lstat=os.lstat):
+    def needs_update(self, *, __lstat=os.lstat):
         #FIXME(ut): getmtime(True) won't detect all changes - for instance COBL
         # has 3/25/2020 8:02:00 AM modification time if unpacked and no
         # amount of internal shuffling won't change its apath.getmtime(True)
@@ -1657,9 +1652,9 @@ class InstallerProject(Installer):
         c, proj_size = [], 0
         cExtend, cAppend = c.extend, c.append
         self._dir_dirs_files = []
-        for root, _d, files in os.walk(apath):
+        for root, _d, files in os.walk(self.abs_path):
             cAppend(getM(root))
-            lstats = [_lstat(join(root, f)) for f in files]
+            lstats = [__lstat(join(root, f)) for f in files]
             cExtend(ls.st_mtime for ls in lstats)
             proj_size += sum(ls.st_size for ls in lstats)
             self._dir_dirs_files.append((root, [], files)) # dirs is unused
@@ -1726,7 +1721,7 @@ class InstallerProject(Installer):
 
 def projects_walk_cache(func): ##: HACK ! Profile
     """Decorator to make sure I don't leak self._dir_dirs_files project cache.
-    Must decorate all methods that may call size_or_mtime_changed (only
+    Must decorate all methods that may call needs_update (only
     called in scan_installers_dir). For self._dir_dirs_files to be of any use
     the call to scan_installers_dir must be followed by refreshBasic calls
     on the projects."""
@@ -2140,8 +2135,7 @@ class InstallersData(DataStore):
                                 'bash.installers.autoRefreshProjects']:
                             installers.add(item) # installer is present
                             continue # and needs not refresh
-                    pending.add(item) if inst.size_or_mtime_changed(
-                        inst.abs_path) else installers.add(item)
+                    (pending if inst.needs_update() else installers).add(item)
         deleted = set(self.ipackages(self)) - installers - pending
         refresh_info = self._RefreshInfo(deleted, pending, folders)
         return refresh_info

@@ -1678,7 +1678,7 @@ class AFile(object):
         return False
 
     def needs_update(self):
-        """Returns True if this file changed. Throws an OSErorr if it is
+        """Returns True if this file changed. Throws an OSError if it is
         deleted."""
         return self._file_changed(self._stat_tuple())
 
