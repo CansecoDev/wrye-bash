@@ -1683,14 +1683,14 @@ class AFile(object):
         return self._file_changed(self._stat_tuple())
 
     def _file_changed(self, stat_tuple):
-        return (self.fsize, self._file_mod_time) != stat_tuple
+        return (self.fsize, self.file_mod_time) != stat_tuple
 
     def _reset_cache(self, stat_tuple, load_cache):
         """Reset cache flags (fsize, mtime,...) and possibly reload the cache.
         :param load_cache: if True either load the cache (header in Mod and
         SaveInfo) or reset it so it gets reloaded later
         """
-        self.fsize, self._file_mod_time = stat_tuple
+        self.fsize, self.file_mod_time = stat_tuple
 
     def __repr__(self): return f'{self.__class__.__name__}<' \
                                f'{self.abs_path.stail}>'
@@ -2901,7 +2901,7 @@ class WryeText:
     2 for two levels, etc.).
     """
 
-    # Conversion ---------------------------------------------------------------
+    # Conversion --------------------------------------------------------------
     @staticmethod
     def genHtml(ins, out=None, *css_dirs):
         """Reads a wtxt input stream and writes an html output stream."""
@@ -3206,7 +3206,7 @@ def convert_wtext_to_html(logPath, logText, *css_dirs):
     with logPath.open(u'w', encoding=u'utf-8-sig') as out:
         WryeText.genHtml(ins, out, *css_dirs)
 
-# Main -------------------------------------------------------------------------
+# Main ------------------------------------------------------------------------
 if __name__ == u'__main__' and len(sys.argv) > 1:
     #--Commands----------------------------------------------------------------
     @mainfunc

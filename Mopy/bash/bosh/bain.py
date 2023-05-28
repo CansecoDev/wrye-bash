@@ -55,7 +55,7 @@ class Installer(ListInfo):
     """Object representing an installer archive, its user configuration, and
     its installation state."""
     #--Member data
-    persistent = (u'fn_key', u'order', u'group', u'modified', u'fsize',
+    persistent = (u'fn_key', u'order', u'group', u'file_mod_time', u'fsize',
         u'crc', u'fileSizeCrcs', u'type', u'is_active', u'subNames',
         u'subActives', u'dirty_sizeCrc', u'comments', u'extras_dict',
         u'packageDoc', u'packagePic', u'src_sizeCrcDate', u'hasExtraData',
@@ -208,7 +208,7 @@ class Installer(ListInfo):
         """Initialize everything to default values."""
         self.fn_key = FName('')
         #--Persistent: set by _refreshSource called by refreshBasic
-        self.modified = 0 #--Modified date
+        self.file_mod_time = 0 #--Modified date
         self.fsize = -1 #--size of archive file
         self.crc = 0 #--crc of archive
         self.isSolid = False #--archives only - solid 7z archive
@@ -1174,7 +1174,7 @@ class Installer(ListInfo):
         return upt_numb, del_numb
 
     def size_or_mtime_changed(self, apath):
-        return (self.fsize, self.modified) != apath.size_mtime()
+        return (self.fsize, self.file_mod_time) != apath.size_mtime()
 
     def open_readme(self): self._open_txt_file(self.hasReadme)
     def open_wizard(self): self._open_txt_file(self.hasWizard)
@@ -1330,7 +1330,7 @@ class InstallerMarker(Installer):
 
     def __init__(self, marker_key):
         Installer.__init__(self, marker_key)
-        self.modified = time.time()
+        self.file_mod_time = time.time()
 
     def __reduce__(self):
         from . import InstallerMarker as boshInstallerMarker
@@ -1418,7 +1418,7 @@ class InstallerArchive(Installer):
     def _refreshSource(self, progress, recalculate_project_crc):
         """Refresh fileSizeCrcs, size, modified, crc, isSolid from archive."""
         #--Basic file info
-        self.fsize, self.modified = self.abs_path.size_mtime() ##: aka _file_mod_time
+        self.fsize, self.file_mod_time = self.abs_path.size_mtime()
         #--Get fileSizeCrcs
         fileSizeCrcs = self.fileSizeCrcs = []
         self.isSolid = False
@@ -1672,12 +1672,12 @@ class InstallerProject(Installer):
             mtime = max(c)
         except ValueError: # int(max([]))
             mtime = 0.0
-        return self.modified != mtime
+        return self.file_mod_time != mtime
 
     def _refreshSource(self, progress, recalculate_project_crc):
         """Refresh src_sizeCrcDate, fileSizeCrcs, size, modified, crc from
         project directory, set project_refreshed to True."""
-        self.modified = self._refresh_from_project_dir(progress,
+        self.file_mod_time = self._refresh_from_project_dir(progress,
                                                        recalculate_project_crc)
         cumCRC = 0
 ##        cumDate = 0
