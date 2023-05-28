@@ -208,7 +208,8 @@ class _MelCtda(MelUnion):
         loaders[self._ctda_mel.mel_sig] = self
 
     def getSlotsUsed(self):
-        return self.decider_result_attr, *self._ctda_mel.getSlotsUsed()
+        return 'ctda_skip', self.decider_result_attr, \
+            *self._ctda_mel.getSlotsUsed()
 
     def getDefaulters(self, mel_set_instance):
         defaultrs = mel_set_instance.defaulters
@@ -347,10 +348,6 @@ class _MelObmeScitGroup(MelGroup):
     simply not put this in a group, because a bunch of code relies on a group
     called 'scriptEffect' existing..."""
 
-    class _MelHackyObject(MelObject):
-        __slots__ = ('efix_param_info', )
-    _mel_object_base_type = _MelHackyObject
-
     def load_mel(self, record, ins, sub_type, size_, *debug_strs):
         target = getattr(record, self.attr)
         target.efix_param_info = record.efix_param_info
@@ -452,7 +449,17 @@ class _MelMgefCode(MelStruct):
         ret_slots = super().getSlotsUsed()
         if self._emulated_attr is not None:
             ret_slots += (self._emulated_attr,)
-        return ret_slots + (self._mgef_int_attr,)
+        return *ret_slots, self._mgef_int_attr
+
+class _MelMgefCodeScit(_MelMgefCode):
+    # HACK see _MelObmeScitGroup - we need to add efix_param_info
+
+    def getDefaulters(self, mel_set_instance):
+        super().getDefaulters(mel_set_instance)
+        mel_set_instance.defaulters['efix_param_info']= self._is_required and 0
+
+    def getSlotsUsed(self):
+        return *super().getSlotsUsed(), 'efix_param_info'
 
 # API - TES3 ------------------------------------------------------------------
 class MelEffectsTes3(MelGroups):

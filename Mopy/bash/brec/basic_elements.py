@@ -24,7 +24,7 @@
 higher-level building blocks can be found in common_subrecords.py."""
 from __future__ import annotations
 
-from itertools import repeat, chain
+from itertools import repeat
 from typing import BinaryIO
 
 from . import utils_constants
@@ -426,10 +426,6 @@ class MelGroup(MelSequential):
         from .record_structs import MelSet
         group_mel_set = MelSet(*elements)
         class _MelObject(self.__class__._mel_object_base_type):
-            __slots__ = tuple(
-                chain(group_mel_set.defaulters, group_mel_set.listers,
-                      (m for m in group_mel_set.mel_providers_dict if
-                       '.' not in m)))
             melSet = group_mel_set
         self._mel_object_type = _MelObject
 

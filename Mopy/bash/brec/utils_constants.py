@@ -41,8 +41,13 @@ class SlottedType(type):
 
     def __new__(cls, name, bases, classdict):
         slots = classdict.get('__slots__', ())
-        classdict['__slots__'] = sorted((*slots, *melSet.getSlotsUsed()) if (
-            melSet := classdict.get('melSet', ())) else slots)
+        ms_slots = melSet.getSlotsUsed() if (
+                melSet := classdict.get('melSet')) else ()
+        if ms_slots and slots:
+            if dup_slots := set(slots) & set(ms_slots):
+                raise SyntaxError(f'{dup_slots} common in melSet ({ms_slots}) '
+                                  f'and provided __slots__ ({slots})')
+        classdict['__slots__'] = sorted({*slots, *ms_slots})
         return super(SlottedType, cls).__new__(cls, name, bases, classdict)
 
 # Form ids --------------------------------------------------------------------

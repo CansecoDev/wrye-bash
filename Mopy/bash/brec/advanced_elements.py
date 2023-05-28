@@ -858,6 +858,9 @@ class MelUnion(MelBase):
         for element in self.element_mapping.values():
             slots_ret.update(element.getSlotsUsed())
         if self.fallback: slots_ret.update(self.fallback.getSlotsUsed())
+        if isinstance(self.decider, PartialLoadDecider):
+            # yep this one too will be assigned to slotted MelObject
+            slots_ret.update(self.decider._loader.getSlotsUsed())
         return tuple(slots_ret)
 
     def getLoaders(self, loaders):
