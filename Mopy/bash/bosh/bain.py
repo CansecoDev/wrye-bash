@@ -1620,7 +1620,6 @@ class InstallerProject(Installer, AFile):
         max_mtime = apRoot.mtime
         pending, pending_size = bolt.LowerDict(), 0
         new_sizeCrcDate = bolt.LowerDict()
-        oldGet = self.src_sizeCrcDate.get
         walk = os.walk(asRoot) if self._dir_dirs_files is None else self._dir_dirs_files
         for asDir, __sDirs, sFiles in walk:
             progress(0.05, f'{progress_msg}{asDir[relPos:]}')
@@ -1632,12 +1631,16 @@ class InstallerProject(Installer, AFile):
                 lstat = os.lstat(asFile)
                 st_size, date = lstat.st_size, lstat.st_mtime
                 max_mtime = max_mtime if max_mtime >= date else date
-                oSize, oCrc, oDate = oldGet(rpFile := asFile[relPos:]) or (0, 0, 0)
-                if st_size == oSize and date == oDate:
-                    new_sizeCrcDate[rpFile] = (oSize, oCrc, oDate, asFile)
-                else:
-                    pending[rpFile] = (st_size, oCrc, date, asFile)
-                    pending_size += st_size
+                try:
+                    oSize, oCrc, oDate = self.src_sizeCrcDate[
+                        rpFile := asFile[relPos:]]
+                    if st_size == oSize and date == oDate:
+                        new_sizeCrcDate[rpFile] = (oSize, oCrc, oDate, asFile)
+                        continue
+                except KeyError: # cannot unpack non-iterable NoneType object
+                    pass
+                pending[rpFile] = (st_size, -1, date, asFile) # recalculate crc
+                pending_size += st_size
         Installer.final_update(new_sizeCrcDate, self.src_sizeCrcDate, pending,
                                pending_size, progress, recalculate_all_crcs,
                                rootName)
