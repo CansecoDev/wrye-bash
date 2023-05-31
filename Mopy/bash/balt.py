@@ -1661,10 +1661,14 @@ class Link(object):
         self._initData(window, selection)
 
     def iselected_infos(self):
-        return (self.window.data_store[x] for x in self.selected)
+        return (self._data_store[x] for x in self.selected)
+
+    @property
+    def _data_store(self):
+        return self.window.data_store
 
     def iselected_pairs(self):
-        return ((x, self.window.data_store[x]) for x in self.selected)
+        return ((x, self._data_store[x]) for x in self.selected)
 
     def _first_selected(self):
         """Return the first selected info."""
@@ -2012,7 +2016,7 @@ class UIList_Delete(EnabledLink):
 
     def _filter_undeletable(self, to_delete_items):
         """Filters out undeletable items from the specified iterable."""
-        return self.window.data_store.filter_essential(to_delete_items)
+        return self._data_store.filter_essential(to_delete_items)
 
     def _enable(self):
         # Only enable if at least one deletable file is selected
@@ -2045,8 +2049,7 @@ class UIList_Rename(EnabledLink):
     @property
     def link_help(self):
         if self.window.could_rename():
-            sel_filtered = list(self.window.data_store.filter_essential(
-                self.selected))
+            sel_filtered = [*self._data_store.filter_essential(self.selected)]
             if len(sel_filtered) == 1:
                 return _('Renames the selected item.')
             elif sel_filtered == self.selected:
@@ -2105,7 +2108,7 @@ class UIList_OpenStore(ItemLink):
     @property
     def link_help(self):
         return _("Open '%(data_store_path)s'.") % {
-            'data_store_path': self.window.data_store.store_dir}
+            'data_store_path': self._data_store.store_dir}
 
     def Execute(self): self.window.open_data_store()
 
@@ -2115,7 +2118,7 @@ class UIList_Hide(EnabledLink):
 
     def _filter_unhideable(self, to_hide_items):
         """Filters out unhideable items from the specified iterable."""
-        return self.window.data_store.filter_essential(to_hide_items)
+        return self._data_store.filter_essential(to_hide_items)
 
     def _enable(self):
         # Only enable if at least one hideable file is selected
@@ -2142,7 +2145,7 @@ class UIList_Hide(EnabledLink):
         if not bass.inisettings[u'SkipHideConfirmation']:
             message = _(u'Hide these files? Note that hidden files are simply '
                         u'moved to the %(hdir)s directory.') % (
-                          {u'hdir': self.window.data_store.hidden_dir})
+                          {'hdir': self._data_store.hidden_dir})
             if not self._askYes(message, _(u'Hide Files')): return
         self.window.hide(self._filter_unhideable(self.selected))
         self.window.RefreshUI(refreshSaves=True)

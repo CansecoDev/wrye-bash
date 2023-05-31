@@ -107,7 +107,7 @@ class Installers_Link(ItemLink):
     @property
     def idata(self):
         """:rtype: bosh.InstallersData"""
-        return self.window.data_store
+        return self._data_store
     @property
     def iPanel(self):
         """:rtype: InstallersPanel"""
