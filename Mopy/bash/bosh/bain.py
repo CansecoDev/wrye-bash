@@ -51,6 +51,8 @@ from ..ini_files import OBSEIniFile, supported_ini_exts
 
 os_sep = os.path.sep
 
+_fnames = Iterable[FName] | None
+
 class Installer(ListInfo):
     """Object representing an installer archive, its user configuration, and
     its installation state."""
@@ -1769,10 +1771,13 @@ class InstallersData(DataStore):
             order = self[self.lastKey].order
         self.moveArchives([marker_name], order)
 
-    def refresh(self, *args, **kwargs): return self.irefresh(*args, **kwargs)
+    def refresh(self, *args, **kwargs):
+        return self.irefresh(*args, **kwargs)
 
     def irefresh(self, progress=None, what=u'DIONSC', fullRefresh=False,
-                 refresh_info=None, deleted=None, pending=None, projects=None):
+                 refresh_info: _RefreshInfo | None = None, *,
+                 deleted: _fnames = None, pending: _fnames = None,
+                 projects: _fnames = None):
         #--Archive invalidation
         from . import InstallerMarker, modInfos, oblivionIni
         if bass.settings[u'bash.bsaRedirection'] and oblivionIni.abs_path.exists():
@@ -1787,8 +1792,29 @@ class InstallersData(DataStore):
         #--Refresh Other - FIXME(ut): docs
         if u'D' in what:
             changes |= self._refresh_from_data_dir(progress, fullRefresh)
-        if u'I' in what: changes |= self._refreshInstallers(
-            progress, fullRefresh, refresh_info, deleted, pending, projects)
+        if 'I' in what:
+            # Update given installers or scan the installers' directory. Any of
+            # deleted, pending takes priority over refresh_info. If all refresh
+            # parameters are None, the Installers dir will be scanned for
+            # changes. Note that if any of those are not None "changed" will
+            # be always True, triggering the rest of the refreshes in irefresh
+            progress = progress or bolt.Progress()
+            #--Current archives
+            if refresh_info is None:
+                if deleted or pending:
+                    refresh_info = self._RefreshInfo(deleted, pending,
+                                                     projects)
+                    pending, projects = refresh_info.pending, \
+                        refresh_info.projects
+                    dirs_files = (pending & projects, pending - projects)
+                else:
+                    dirs_files = top_level_items(bass.dirs['installers'])
+                progress(0, _('Scanning Packages...'))
+                refresh_info = self.scan_installers_dir(*dirs_files,
+                    fullRefresh, progress, refresh_info=refresh_info)
+            for del_item in refresh_info.deleted:
+                self.pop(del_item)
+            changes |= refresh_info.refresh_needed()
         if u'O' in what or changes: changes |= self.refreshOrder()
         if u'N' in what or changes: changes |= self.refreshNorm()
         if u'S' in what or changes: changes |= self.refreshInstallersStatus()
@@ -1973,48 +1999,6 @@ class InstallersData(DataStore):
             return bool(
                 self.deleted or self.pending or self._added or self._refreshed)
 
-    def _refreshInstallers(self, progress, fullRefresh, refresh_info, deleted,
-                           pending, projects):
-        """Update given installers or scan the installers' directory. Any of
-        deleted, pending takes priority over refresh_info. If all refresh
-        parameters are None, the Installers dir will be scanned for changes.
-        Note that if any of those are not None "changed" will be always
-        True, triggering the rest of the refreshes in irefresh. Once
-        refresh_info is calculated, deleted are removed, refreshBasic is
-        called on added/updated files.
-        :type progress: bolt.Progress | None
-        :type fullRefresh: bool
-        :type refresh_info: InstallersData._RefreshInfo | None
-        :type deleted: collections.Iterable[FName] | None
-        :type pending: collections.Iterable[FName] | None
-        :type projects: collections.Iterable[FName] | None
-        """
-        # TODO(ut):we need to return the refresh_info for more granular control
-        # in irefresh and also add extra processing for deleted files
-        progress = progress or bolt.Progress()
-        #--Current archives
-        if refresh_info is deleted is pending is None:
-            progress(0, _('Scanning Packages...'))
-            refresh_info = self.scan_installers_dir(
-                *top_level_items(bass.dirs['installers']), fullRefresh,
-                progress)
-        elif refresh_info is None:
-            refresh_info = self._RefreshInfo(deleted, pending, projects)
-        for del_item in refresh_info.deleted:
-            self.pop(del_item)
-        pending, projects = refresh_info.pending, refresh_info.projects
-        #--New/update crcs?
-        for subPending, inst_type in zip(
-                (pending - projects, pending & projects), self._inst_types):
-            if not subPending: continue
-            progress(0,_(u'Scanning Packages...'))
-            progress.setFull(len(subPending))
-            for index,package in enumerate(sorted(subPending)):
-                progress(index, _('Scanning Packages...') + f'\n{package}')
-                inst_type.refresh_installer(package, self, progress,
-                    _index=index, _fullRefresh=fullRefresh)
-        return refresh_info.refresh_needed()
-
     def applyEmbeddedBCFs(self, installers=None, destArchives=None,
                           progress=bolt.Progress()):
         if installers is None:
@@ -2083,18 +2067,19 @@ class InstallersData(DataStore):
             raise # UI expects that
 
     def scan_installers_dir(self, folders, files, fullRefresh, progress, *,
-                            __skip_prefixes=('bash', '--')):
+                            refresh_info=None, __skip_prefixes=('bash', '--')):
         """March through the Bash Installers dir scanning for new and modified
         projects/packages, skipping as necessary. It will refresh projects on
         boot.
         :rtype: InstallersData._RefreshInfo"""
         _added, _refreshed, installers = set(), set(), set()
-        files = [f for f in files if f.fn_ext in readExts
-                 and not f.lower().startswith(__skip_prefixes)]
-        folders = {f for f in folders if
-            # skip Bash directories and user specified ones
-            (low := f.lower()) not in self.installers_dir_skips and
-            not low.startswith(__skip_prefixes)}
+        if refresh_info is None:
+            files = [f for f in files if f.fn_ext in readExts
+                     and not f.lower().startswith(__skip_prefixes)]
+            folders = {f for f in folders if
+                # skip Bash directories and user specified ones
+                (low := f.lower()) not in self.installers_dir_skips and
+                not low.startswith(__skip_prefixes)}
         progress.setFull(len(files) + len(folders))
         index = 0
         for items, is_proj in ((files, False), (folders, True)):
@@ -2115,9 +2100,11 @@ class InstallersData(DataStore):
                         recalculate_project_crc=fullRefresh):
                     _refreshed.add(item)
                 else: installers.add(item)
-        deleted = set(self.ipackages(self)) - installers - _refreshed - _added
-        refresh_info = self._RefreshInfo(deleted, projects=folders,
-                                         _added=_added, _refreshed=_refreshed)
+        if refresh_info is None:
+            deleted = set(self.ipackages(self)) - installers - _refreshed - \
+                      _added
+            refresh_info = self._RefreshInfo(deleted, projects=folders,
+                _added=_added, _refreshed=_refreshed)
         return refresh_info
 
     def refreshOrder(self):
