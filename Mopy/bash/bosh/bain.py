@@ -1109,7 +1109,7 @@ class Installer(ListInfo):
         return self._make_wizard_file_dir(self.has_fomod_conf)
 
     #--ABSTRACT ---------------------------------------------------------------
-    def install(self, destFiles, progress=None):
+    def install(self, destFiles, progress=None, mod_infos=None):
         """Install specified files to Data directory."""
         destFiles = set(destFiles)
         dest_src = self.refreshDataSizeCrc(True)
@@ -1117,16 +1117,15 @@ class Installer(ListInfo):
             if k not in destFiles: del dest_src[k]
         if not dest_src: return bolt.LowerDict(), set(), set(), set()
         progress = progress if progress else bolt.Progress()
-        return self._install(dest_src, progress)
+        return self._install(dest_src, progress, mod_infos)
 
-    def _install(self, dest_src, progress):
+    def _install(self, dest_src, progress, mod_infos):
         raise NotImplementedError
 
-    def _fs_install(self, dest_src, srcDirJoin, progress,
-                    subprogressPlus, unpackDir):
+    def _fs_install(self, dest_src, srcDirJoin, progress, subprogressPlus,
+                    unpackDir, mod_infos):
         """Filesystem install, if unpackDir is not None we are installing
          an archive."""
-        norm_ghostGet = Installer.getGhosted().get
         data_sizeCrcDate_update = bolt.LowerDict()
         data_sizeCrc = self.ci_dest_sizeCrc
         mods, inis, bsas = set(), set(), set()
@@ -1137,10 +1136,13 @@ class Installer(ListInfo):
         bsa_ext = bush.game.Bsa.bsa_extension
         for dest, src in dest_src.items():
             dest_size, crc = data_sizeCrc[dest]
+            dest_path = join_data_dir(dest)
             # Work with ghosts lopped off internally and check the destination,
             # since plugins may have been renamed
             if (dest_fname := FName('%s' % dest)) in installer_plugins:
                 mods.add(dest_fname)
+                if mod_info := mod_infos.get(dest_fname):
+                    dest_path = mod_info.abs_path
             elif ini_name := is_ini_tweak(dest_fname):
                 inis.add(FName(ini_name))
             elif dest_fname.fn_ext == bsa_ext:
@@ -1148,7 +1150,7 @@ class Installer(ListInfo):
             data_sizeCrcDate_update[dest] = (dest_size, crc, -1) ##: HACK we must try avoid stat'ing the mtime
             # Append the ghost extension JIT since the FS operation below will
             # need the exact path to copy to
-            sources_dests[srcDirJoin(src)] = join_data_dir(norm_ghostGet(dest, dest))
+            sources_dests[srcDirJoin(src)] = dest_path
             subprogressPlus()
         #--Now Move
         try:
@@ -1341,9 +1343,8 @@ class InstallerMarker(Installer):
     def log_package(self, log, showInactive):
         log(f'{f"{self.order:03d}"} - {self.fn_key}')
 
-    def install(self, destFiles, progress=None):
-        """Install specified files to Data directory."""
-        pass
+    def install(self, destFiles, progress=None, mod_infos=None):
+        """No install for markers."""
 
     def renameInstaller(self, name_new, idata_):
         del idata_[self.fn_key]
@@ -1454,7 +1455,7 @@ class InstallerArchive(_InstallerPackage):
                 bolt.clearReadOnly(unpack_dir)
         return GPath_no_norm(unpack_dir)
 
-    def _install(self, dest_src, progress):
+    def _install(self, dest_src, progress, mod_infos):
         #--Extract
         progress(0, (u'%s\n' % self) + _(u'Extracting files...'))
         unpackDir = self.unpackToTemp(list(dest_src.values()),
@@ -1466,7 +1467,7 @@ class InstallerArchive(_InstallerPackage):
         subprogress.setFull(len(dest_src))
         subprogressPlus = subprogress.plus
         return self._fs_install(dest_src, srcDirJoin, progress,
-                                subprogressPlus, unpackDir)
+                                subprogressPlus, unpackDir, mod_infos)
 
     def unpackToProject(self, project, progress=None):
         """Unpacks archive to build directory."""
@@ -1677,14 +1678,14 @@ class InstallerProject(_InstallerPackage):
         self.project_refreshed = True
 
     # Installer API -----------------------------------------------------------
-    def _install(self, dest_src, progress):
+    def _install(self, dest_src, progress, mod_infos):
         progress.setFull(len(dest_src))
         progress(0, f'{self}\n' + _(u'Moving files...'))
         progressPlus = progress.plus
         #--Copy Files
         srcDirJoin = self.abs_path.join
         return self._fs_install(dest_src, srcDirJoin, progress, progressPlus,
-                                None)
+                                None, mod_infos)
 
     def sync_from_data(self, delta_files: set[CIstr], progress):
         return self._do_sync_data(self.abs_path, delta_files, progress)
@@ -2494,12 +2495,12 @@ class InstallersData(DataStore):
     def __installer_install(self, installer, destFiles, index, progress,
                             refresh_ui):
         sub_progress = SubProgress(progress, index, index + 1)
+        from . import bsaInfos, iniInfos, modInfos
         data_sizeCrcDate_update, mods, inis, bsas = installer.install(
-            destFiles, sub_progress)
+            destFiles, sub_progress, modInfos)
         refresh_ui[0] |= bool(mods)
         refresh_ui[1] |= bool(inis)
         # refresh modInfos, iniInfos adding new/modified mods
-        from . import bsaInfos, iniInfos, modInfos
         for mod in mods.copy(): # size may change during iteration
             try:
                 modInfos.new_info(mod, owner=installer.fn_key)
@@ -2763,7 +2764,8 @@ class InstallersData(DataStore):
         * Correct underrides in anPackages.
         * Install missing files from active anPackages."""
         progress = progress if progress else bolt.Progress()
-        anPackages = (self[package] for package in (anPackages or self))
+        anPackages = (self[package] for package in
+                      (anPackages or self.filterInstallables(self)))
         #--Get remove/refresh files from anPackages
         removes = set()
         for installer in anPackages:
@@ -3082,16 +3084,20 @@ class InstallersData(DataStore):
         """Remove markers from installerKeys."""
         return (x for x in installerKeys if not self[x].is_marker)
 
-    def createFromData(self, projectPath, ci_files, progress):
+    def createFromData(self, projectPath, ci_files: list[CIstr], progress,
+                       mod_infos):
         if not ci_files: return
-        norm_ghost_get = Installer.getGhosted().get
         subprogress = SubProgress(progress, 0, 0.8, full=len(ci_files))
         srcJoin = bass.dirs[u'mods'].join
         dstJoin = self.store_dir.join(projectPath).join
         for i,filename in enumerate(ci_files):
             subprogress(i, filename)
-            srcJoin(norm_ghost_get(filename, filename)).copyTo(
-                dstJoin(filename))
+            try:
+                srcJoin(filename).copyTo(dstJoin(filename))
+            except FileNotFoundError: # modInfos MUST BE UPDATED
+                if minf := mod_infos.get(filename): # try the ghost
+                    srcJoin(minf.abs_path).copyTo(dstJoin(filename))
+                else: raise
         # Refresh, so we can manipulate the InstallerProject item
         self._inst_types[1].refresh_installer(projectPath, self, progress,
             do_refresh=True, install_order=len(self)) # install last
