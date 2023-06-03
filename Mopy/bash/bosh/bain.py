@@ -1226,7 +1226,7 @@ class Installer(ListInfo):
         installer.refreshBasic(progress, recalculate_project_crc=_fullRefresh)
         if progress: progress(1.0, _(u'Done'))
         if do_refresh:
-            idata.irefresh(what=u'NS')
+            idata.refresh_ns()
         return installer
 
 class _InstallerPackage(Installer, AFile):
@@ -1814,6 +1814,12 @@ class InstallersData(DataStore):
         #--Done
         if changes: self.hasChanged = True
         return changes
+
+    def refresh_ns(self, *args, **kwargs):
+        self.irefresh(*args, **kwargs, what='NS')
+
+    def refresh_n(self, *args, **kwargs):
+        self.irefresh(*args, **kwargs, what='N')
 
     def __load(self, progress):
         progress = progress or bolt.Progress()
@@ -2572,7 +2578,8 @@ class InstallersData(DataStore):
                 self._editTweaks(tweaksCreated)
                 refresh_ui[1] |= bool(tweaksCreated)
             return tweaksCreated
-        finally: self.irefresh(what=u'NS')
+        finally:
+            self.refresh_ns()
 
     #--Uninstall, Anneal, Clean
     @staticmethod
@@ -2748,7 +2755,7 @@ class InstallersData(DataStore):
                         refresh_ui[1] = True
                         iniInfos[ini_name].set_table_prop('installer', '%s' % ikey)
         finally:
-            self.irefresh(what=u'NS')
+            self.refresh_ns()
 
     def _restoreFiles(self, restores, refresh_ui, progress):
         installer_destinations = {}
@@ -2851,7 +2858,7 @@ class InstallersData(DataStore):
                 if emptyDir.is_dir() and not [*emptyDir.ilist()]:
                     emptyDir.removedirs()
         finally:
-            self.irefresh(what=u'NS')
+            self.refresh_ns()
 
     #--Utils
     @staticmethod
