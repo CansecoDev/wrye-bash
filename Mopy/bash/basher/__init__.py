@@ -3458,9 +3458,9 @@ class InstallersPanel(BashTab):
                         deprint(f'Extending projects: {omod_projects}')
                         folders.extend(omod_projects)
                 if not do_refresh:
-                    with balt.Progress(_('Scanning Packages...')) as progress:
-                        refresh_info = self.listData.scan_installers_dir(
-                            folders, files, fullRefresh, progress)
+                    #with balt.Progress(_('Scanning Packages...')) as progress:
+                    refresh_info = self.listData.scan_installers_dir(
+                        folders, files, fullRefresh, progress=bolt.Progress())
                     do_refresh = refresh_info.refresh_needed()
             refreshui = False
             if do_refresh:
