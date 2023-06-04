@@ -39,7 +39,7 @@ def test_compress_extract_with_spaces(capsys):
             full_out = GPath(os.path.join(dirname, out_fname))
             # check "temp_list" arg, for excluding files from compression
             templist = os.path.join(dirname, 'temp list.txt')
-            with open(templist, 'w', encoding=u'utf-8-sig') as out:
+            with open(templist, 'w', encoding='utf-8') as out:
                 out.write(u'*thumbs.db\n')
             try:
                 with open(thumbs := os.path.join(_utils_dir, 'thumbs.db'),

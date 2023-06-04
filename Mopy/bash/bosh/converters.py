@@ -35,6 +35,7 @@ from ..archives import defaultExt, readExts
 from ..bolt import DataDict, Path, PickleDict, SubProgress, \
     forward_compat_path_to_fn_list, top_level_files
 from ..exception import ArgumentError, StateError
+from ..wbtemp import TempDir, TempFile
 
 converters_dir: Path | None = None
 installers_dir: Path | None = None
@@ -410,7 +411,6 @@ class InstallerConverter(object):
         """Builds and packages a BCF"""
         progress = progress if progress else bolt.Progress()
         #--Initialization
-        bass.rmTempDir()
         srcFiles = {}
         destFiles = []
         destInstaller = idata[destArchive]
@@ -442,25 +442,25 @@ class InstallerConverter(object):
             #--Extract any subArchives
             #--It would be faster to read them with 7z l -slt
             #--But it is easier to use the existing recursive extraction
-            for index, (installerCRC, subs) in enumerate(subArchives.items()):
-                installer = crc_installer[installerCRC]
-                self._unpack(installer, subs,
-                             SubProgress(progress, lastStep, nextStep))
-                lastStep = nextStep
-                nextStep += step
-            #--Note all extracted files
-            tmpDir = bass.getTempDir()
-            for crc in tmpDir.ilist():
-                fpath = tmpDir.join(crc)
-                for root_dir, y, files in fpath.walk(): ##: replace with os walk!!
-                    for file in files:
-                        file = root_dir.join(file)
-                        # crc is an FName, but we want to store strings
-                        archivedFiles[file.crc] = (
-                            str(crc), file.s[len(fpath)+1:]) # +1 for '/'
+            with TempDir() as combined_temp_dir:
+                for installerCRC, subs in subArchives.items():
+                    installer = crc_installer[installerCRC]
+                    self._unpack(installer, subs,
+                        SubProgress(progress, lastStep, nextStep),
+                        temp_dir=combined_temp_dir)
+                    lastStep = nextStep
+                    nextStep += step
+                #--Note all extracted files
+                for crc in combined_temp_dir.ilist():
+                    fpath = combined_temp_dir.join(crc)
+                    for root_dir, y, files in fpath.walk(): ##: replace with os walk!!
+                        for file in files:
+                            file = root_dir.join(file)
+                            # crc is an FName, but we want to store strings
+                            archivedFiles[file.crc] = (
+                                str(crc), file.s[len(fpath)+1:]) # +1 for '/'
             #--Add the extracted files to the source files list
             srcFiles.update(archivedFiles)
-            bass.rmTempDir()
         #--Make list of destination files
         bcf_missing = u'BCF-Missing'
         for fileName, __size, fileCRC in destInstaller.fileSizeCrcs:
@@ -530,39 +530,38 @@ class InstallerConverter(object):
         bass.rmTempDir()
 
     def _unpack(self, srcInstaller, fileNames, progress=None, *,
-                __read_ext=tuple(readExts)):
+                __read_ext=tuple(readExts), temp_dir: Path):
         """Recursive function: completely extracts the source installer to
-        subTempDir. It does NOT clear the temp folder.  This should be done
-        prior to calling the function. Each archive and sub-archive is
-        extracted to its own sub-directory to prevent file thrashing"""
+        a temporary directory. Each archive and sub-archive is extracted to its
+        own sub-directory to prevent file thrashing. Requires the temp
+        directory to which to extract as a parameter."""
         #--Sanity check
         if not fileNames: raise ArgumentError(
             f'No files to extract for {srcInstaller}.')
-        tmpDir = bass.getTempDir()
-        tempList = bolt.Path.baseTempDir().join(u'WryeBash_listfile.txt')
-        #--Dump file list
-        try:
-            ##: We don't use a BOM for tempList in unpackToTemp...
-            with tempList.open(u'w', encoding=u'utf-8-sig') as out:
-                out.write(u'\n'.join(fileNames))
-        except Exception as e:
-            raise StateError(
-                f'Error creating file list for 7z:\nError: {e}') from e
-        #--Determine settings for 7z
-        installerCRC = srcInstaller.crc
-        apath = srcInstaller if isinstance(srcInstaller,
-                                           Path) else srcInstaller.abs_path
-        subTempDir = tmpDir.join(f'{installerCRC:08X}')
-        if progress:
-            progress(0, f'{apath}\n' + _(u'Extracting files...'))
-            progress.setFull(1 + len(fileNames))
-        #--Extract files
-        try:
-            subArchives = archives.extract7z(apath, subTempDir, progress,
-                    read_exts=__read_ext, filelist_to_extract=tempList.s)
-        finally:
-            tempList.remove()
-            bolt.clearReadOnly(subTempDir)  ##: do this once
+        with TempFile(temp_prefix='temp_list', temp_suffix='.txt') as tl:
+            #--Dump file list
+            try:
+                with tl.open('w', encoding='utf-8') as out:
+                    out.write('\n'.join(fileNames))
+            except Exception as e:
+                raise StateError(
+                    f'Error creating file list for 7z:\nError: {e}') from e
+            #--Determine settings for 7z
+            installerCRC = srcInstaller.crc
+            apath = srcInstaller if isinstance(
+                srcInstaller, Path) else srcInstaller.abs_path
+            tmp_sub = temp_dir.join(f'{installerCRC:08X}')
+            if progress:
+                progress(0, f"{apath}\n{_('Extracting files...')}")
+                progress.setFull(1 + len(fileNames))
+            try:
+                subArchives = archives.extract7z(apath, tmp_sub, progress,
+                    read_exts=__read_ext, filelist_to_extract=tl)
+            finally:
+                ##: Why are we doing this at all? We have a ton of extract7z
+                # calls, but only two do clearReadOnly afterwards
+                bolt.clearReadOnly(tmp_sub)  ##: do this once
         #--Recursively unpack subArchives
-        for sub_archive in (subTempDir.join(a) for a in subArchives):
-            self._unpack(sub_archive, [u'*']) # it will also unpack the embedded BCF if any...
+        for sub_archive in subArchives:
+            # it will also unpack the embedded BCF if any...
+            self._unpack(tmp_sub.join(sub_archive), ['*'])
