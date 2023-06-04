@@ -2976,7 +2976,8 @@ class InstallersList(UIList):
         install, in case a refresh is requested because those files were
         modified/deleted (BAIN only scans Data/ once or boot). If 'shallow' is
         True (only the configurations of the installers changed) it will run
-        refreshDataSizeCrc of the installers, otherwise a full refreshBasic."""
+        refreshDataSizeCrc of the installers, otherwise a full _refresh_status.
+        """
         toRefresh = list(self.data_store.ipackages(toRefresh))
         if not toRefresh: return
         try:
@@ -2991,8 +2992,8 @@ class InstallersList(UIList):
                     if shallow:
                         op = installer.refreshDataSizeCrc
                     else:
-                        op = partial(installer.refreshBasic, SubProgress(
-                            progress, index, index + 1),
+                        op = partial(installer._refresh_status,
+                            progress=SubProgress(progress, index, index + 1),
                             recalculate_project_crc=calculate_projects_crc)
                     dest.update(op())
                 self.data_store.hasChanged = True  # is it really needed ?

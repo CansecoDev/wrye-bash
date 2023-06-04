@@ -549,8 +549,7 @@ class Installer_SkipRefresh(CheckLink, _SingleProject):
         skipRefresh is set to False."""
         installer = self._selected_info
         installer.skipRefresh ^= True
-        if not installer.skipRefresh:
-            installer.refreshBasic(progress=None)
+        if installer.do_update(): # will return False if skipRefresh == True
             installer.refreshStatus(self.idata)
             self.idata.refresh_n()
             self.window.RefreshUI()
@@ -1242,8 +1241,9 @@ class Installer_SyncFromData(_SingleInstallable):
                     'act_deleted': actual_del, 'exp_deleted': len(ed_missing),
                     'act_updated': actual_upd,
                     'exp_updated': len(ed_mismatched)})
-            self._selected_info.refreshBasic(SubProgress(progress, 0.7, 0.8),
-                                             recalculate_project_crc=True)
+            self._selected_info.do_update(force_update=True,
+                recalculate_project_crc=True,
+                progress=SubProgress(progress, 0.7, 0.8))
             if was_rar:
                 final_package = self._selected_info.writable_archive_name()
                 # Move the new archive directly underneath the old archive

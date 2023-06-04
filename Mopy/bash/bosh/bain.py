@@ -186,7 +186,7 @@ class Installer(ListInfo):
     def initDefault(self):
         """Initialize everything to default values."""
         self.fn_key = FName('')
-        #--Persistent: set by _refreshSource called by refreshBasic
+        #--Persistent: set by _refreshSource called by _reset_cache
         self.file_mod_time = 0 #--Modified date
         self.fsize = -1 #--size of archive file
         self.crc = 0 #--crc of archive
@@ -195,7 +195,7 @@ class Installer(ListInfo):
         self.fileSizeCrcs = [] #--list of tuples for _all_ files in installer
         #--For InstallerProject's, cache if refresh projects is skipped
         self.src_sizeCrcDate = bolt.LowerDict()
-        #--Set by refreshBasic
+        #--Set by _reset_cache
         self.fileRootIdex = 0 # len of the root path including the final separator
         self.type = 0 #--Package type: 0: unset/invalid; 1: simple; 2: complex
         self.subNames = []
@@ -344,7 +344,7 @@ class Installer(ListInfo):
         if self._remaps and not isinstance(next(iter(self._remaps)), FName):
             self._remaps = forward_compat_path_to_fn(self._remaps,
                 value_type=lambda v: FName('%s' % v)) # Path -> FName
-        if isinstance(self, InstallerMarker): return
+        if not isinstance(self, _InstallerPackage): return
         if not self.abs_path.exists(): # pickled installer deleted outside bash
             return  # don't do anything should be deleted from our data soon
         if not isinstance(self.src_sizeCrcDate, bolt.LowerDict):
@@ -354,7 +354,7 @@ class Installer(ListInfo):
             self.dirty_sizeCrc = bolt.LowerDict(
                 (u'%s' % x, y) for x, y in self.dirty_sizeCrc.items())
         if rescan:
-            dest_scr = self.refreshBasic(bolt.Progress())
+            dest_scr = self._reset_cache()
         else:
             dest_scr = self.refreshDataSizeCrc()
         if self.overrideSkips:
@@ -983,10 +983,6 @@ class Installer(ListInfo):
                 dest = os_sep.join(('Docs', file_relative))
         return dest
 
-    def refreshBasic(self, progress, **kwargs):
-        """Extract file/size/crc and BAIN structure info from installer."""
-        raise NotImplementedError
-
     def refreshStatus(self, installersData):
         """Updates missingFiles, mismatchedFiles and status.
         Status:
@@ -1214,7 +1210,8 @@ class Installer(ListInfo):
                 idata.moveArchives([package], install_order)
         if _index is not None:
             progress = SubProgress(progress, _index, _index + 1)
-        installer.refreshBasic(progress, recalculate_project_crc=_fullRefresh)
+        installer.do_update(progress=progress, force_update=True,
+                            recalculate_project_crc=_fullRefresh)
         if progress: progress(1.0, _(u'Done'))
         if do_refresh:
             idata.refresh_ns()
@@ -1222,15 +1219,13 @@ class Installer(ListInfo):
 
 class _InstallerPackage(Installer, AFile):
 
-    def _reset_cache(self, stat_tuple, **kwargs):
-        self.refreshBasic(kwargs.pop('progress'), stat_tuple=stat_tuple, **kwargs)
-
-    def refreshBasic(self, progress, *, _os_sep=os_sep, skips_start=tuple(
+    def _reset_cache(self, stat_tuple=None, *, skips_start=tuple(
             s.replace(os_sep, '') for s in Installer._silentSkipsStart),
-            **kwargs):
+            _os_sep=os_sep, **kwargs):
         """Extract file/size/crc and BAIN structure info from installer."""
         try:
-            self._refreshSource(progress, **kwargs)
+            self._refreshSource(kwargs.pop('progress', bolt.Progress()),
+                                stat_tuple, **kwargs)
         except InstallerArchiveError:
             self.type = -1 # size, modified and some of fileSizeCrcs may be set
             return bolt.LowerDict()
@@ -1284,11 +1279,11 @@ class _InstallerPackage(Installer, AFile):
         #--Data Size Crc
         return self.refreshDataSizeCrc()
 
-    def _refreshSource(self, progress, **kwargs):
+    def _refreshSource(self, progress, stat_tuple, **kwargs):
         """Refresh fileSizeCrcs, size, and modified from source
         archive/directory. fileSizeCrcs is a list of tuples, one for _each_
         file in the archive or project directory. _refreshSource is called
-        in refreshBasic only. In projects the src_sizeCrcDate cache is used to
+        in _reset_cache only. In projects the src_sizeCrcDate cache is used to
         avoid recalculating crc's.
         :param recalculate_project_crc: only used in InstallerProject override
         """
@@ -1352,10 +1347,6 @@ class InstallerMarker(Installer):
         idata_[self.fn_key] = self
         return True, False, False
 
-    def refreshBasic(self, progress, **kwargs):
-        """Marker: size is -1, fileSizeCrcs empty, modified = creation time."""
-        return bolt.LowerDict()
-
 #------------------------------------------------------------------------------
 class InstallerArchive(_InstallerPackage):
     """Represents an archive installer entry."""
@@ -1401,7 +1392,7 @@ class InstallerArchive(_InstallerPackage):
                 *(getattr(self, a) for a in self.persistent[1:]))
 
     #--File Operations --------------------------------------------------------
-    def _refreshSource(self, progress, stat_tuple=None, **kwargs):
+    def _refreshSource(self, progress, stat_tuple, **kwargs):
         """Refresh fileSizeCrcs, size, modified, crc, isSolid from archive."""
         #--Basic file info
         super(Installer, self)._reset_cache(stat_tuple or self._stat_tuple())
@@ -1629,7 +1620,7 @@ class InstallerProject(_InstallerPackage):
         return size_apath_date, sum(
             v[0] for v in size_apath_date.values()), max_node_mtime
 
-    def _refreshSource(self, progress, stat_tuple=None,
+    def _refreshSource(self, progress, stat_tuple,
                        recalculate_project_crc=False, **kwargs):
         """Refresh src_sizeCrcDate, fileSizeCrcs, size, modified, crc from
         project directory, set project_refreshed to True."""
@@ -1990,7 +1981,7 @@ class InstallersData(DataStore):
             self.pending = frozenset(pending or ())   # new or updated keys
             self.projects = frozenset(projects or ()) # all project keys
             self._added = frozenset(_added or ())  # all added keys - wip
-            # all updated keys - refreshBasic is already called!
+            # all updated keys - _reset_cache is already called!
             self._refreshed = frozenset(_refreshed or ())
 
         def refresh_needed(self):
