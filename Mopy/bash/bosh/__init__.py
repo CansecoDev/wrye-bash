@@ -530,7 +530,7 @@ class ModInfo(FileInfo):
     @FileInfo.abs_path.getter
     def abs_path(self):
         """Return joined dir and name, adding .ghost if the file is ghosted."""
-        return (self._file_key + u'.ghost') if self.isGhost else self._file_key
+        return (self._file_key + '.ghost') if self.isGhost else self._file_key
 
     def setGhost(self, isGhost):
         """Sets file to/from ghost mode. Returns ghost status at end."""

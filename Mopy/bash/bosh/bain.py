@@ -2616,10 +2616,13 @@ class InstallersData(DataStore):
         reModExtSearch = modInfos.rightFileType
         removedPlugins = set()
         removedInis = set()
+        remove_paths = {}
         #--Construct list of files to delete
-        norm_ghost_get = Installer.getGhosted().get
         for ci_relPath in ci_removes:
-            path = modsDirJoin(norm_ghost_get(ci_relPath, ci_relPath))
+            try:
+                path = modInfos[str(ci_relPath)].abs_path
+            except KeyError:
+                path = modsDirJoin(ci_relPath)
             if path.exists():
                 if reModExtSearch(ci_relPath): # don't mind the FName(str) they are few
                     removedPlugins.add(FName(str(ci_relPath)))
@@ -2628,6 +2631,7 @@ class InstallersData(DataStore):
                 else:
                     nonPlugins.add(path)
                     emptyDirsAdd(path.head)
+                remove_paths[ci_relPath] = path
         #--Now determine which directories will be empty, replacing subsets of
         # removedFiles by their parent dir if the latter will be emptied
         nonPlugins = self._determineEmptyDirs(emptyDirs, nonPlugins)
@@ -2650,8 +2654,8 @@ class InstallersData(DataStore):
             raise
         finally:
             if ex:
-                ci_removes = [f for f in ci_removes if
-                              not modsDirJoin(norm_ghost_get(f, f)).exists()]
+                ci_removes = [k for k, v in remove_paths.items() if
+                              not v.exists()]
             #--Update InstallersData
             data_sizeCrcDatePop = self.data_sizeCrcDate.pop
             for ci_relPath in ci_removes:
