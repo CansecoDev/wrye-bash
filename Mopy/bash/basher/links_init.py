@@ -88,6 +88,7 @@ def InitStatusBar():
             ' '.join((_('Launch'), bush.game.Ck.long_name)),
             ' '.join((_('Launch'), bush.game.Ck.long_name, '%(app_version)s')),
             bush.game.Ck.se_args),
+        Nexus_Button(uid='NexusStatus'),
         # OBMM
         app_button_factory(bass.dirs['app'].join('OblivionModManager.exe'),
                            _png_list('tools/obmm%s.png'), _('Launch OBMM'),
