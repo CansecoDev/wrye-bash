@@ -64,7 +64,8 @@ class _ATextInput(_AComponent):
     _native_widget: _wx.TextCtrl
 
     # TODO: (fixed) font(s)
-    def __init__(self, parent, init_text=None, multiline=True, editable=True,
+    def __init__(self, parent, init_text: str | None = None, multiline=True,
+            editable=True,
             auto_tooltip=True, max_length=None, no_border=False,
             alignment=TextAlignment.LEFT, style=0):
         """Creates a new _ATextInput instance with the specified properties.
@@ -96,6 +97,8 @@ class _ATextInput(_AComponent):
             ##: multiline + max length is not supported on GTK
             if not multiline or _wx.Platform != u'__WXGTK__':
                 self._native_widget.SetMaxLength(max_length)
+        if hint:
+            self._set_hint(hint)
         # Events
         # Internal use only - used to implement auto_tooltip below
         self._on_size_changed = self._evt_handler(_wx.EVT_SIZE)
@@ -107,6 +110,12 @@ class _ATextInput(_AComponent):
         if auto_tooltip:
             self._on_size_changed.subscribe(self._on_size_change)
             self.on_text_changed.subscribe(self._update_tooltip)
+
+    def _set_hint(self, hint):
+        """Internal method for setting a text area's hint (the grey text that
+        will be in it if it's empty). Needs to be overriden by SearchBar since
+        SetHint is broken for that one on Windows."""
+        self._native_widget.SetHint(hint)
 
     def _update_tooltip(self, new_text: str):
         """Internal callback that shows or hides the tooltip depending on the
@@ -193,7 +202,7 @@ class TextField(_ATextInput):
         """Creates a new TextField instance with the specified properties.
         See _ATextInput for documentation on kwargs."""
         self._wx_parent = self._resolve(parent)
-        super(TextField, self).__init__(parent, *args, multiline=False,
+        super().__init__(parent, *args, multiline=False,
             style=_wx.TE_PROCESS_ENTER, **kwargs)
         # Handle Enter -> OK button event to parent
         self._on_enter = self._evt_handler(_wx.EVT_TEXT_ENTER)
@@ -235,6 +244,16 @@ class SearchBar(TextField):
         def _clear_search_bar():
             self.text_content = ''
         on_cancel.subscribe(_clear_search_bar)
+
+class PasswordField(_ATextInput):
+    """A single-line text edit widget that hides the entered characters. See
+    the documentation for _ATextInput for a list of the events this component
+    offers."""
+    def __init__(self, parent, *args, **kwargs):
+        """Creates a new PasswordField instance with the specified properties.
+        See _ATextInput for documentation on kwargs."""
+        super().__init__(parent, *args, multiline=False, style=_wx.TE_PASSWORD,
+            **kwargs)
 
 # Labels ----------------------------------------------------------------------
 class _ALabel(_AComponent):
