@@ -73,6 +73,7 @@ saveInfos: SaveInfos | None = None
 iniInfos: INIInfos | None = None
 bsaInfos: BSAInfos | None = None
 screen_infos: ScreenInfos | None = None
+se_plugin_infos: SEPluginInfos | None = None
 
 #--Header tags
 # re does not support \p{L} - [^\W\d_] is almost equivalent (N vs Nd)
@@ -1414,6 +1415,18 @@ class ScreenInfo(FileInfo):
 
     @classmethod
     def get_store(cls): return screen_infos
+
+#------------------------------------------------------------------------------
+class SEPluginInfo(FileInfo):
+    """An xSE plugin."""
+    _valid_exts_re = r'(\.dll)'
+
+    def __init__(self, fullpath, load_cache=False, itsa_ghost=None):
+        super().__init__(fullpath, load_cache)
+
+    @classmethod
+    def get_store(cls):
+        return se_plugin_infos
 
 #------------------------------------------------------------------------------
 class DataStore(DataDict):
@@ -3449,7 +3462,7 @@ class BSAInfos(FileInfos):
 
 #------------------------------------------------------------------------------
 class ScreenInfos(FileInfos):
-    """Collection of screenshot. This is the backend of the Screens tab."""
+    """Collection of screenshots. This is the backend of the Screens tab."""
     _bain_notify = False # BAIN can't install to game dir
     # Files that go in the main game folder (aka default screenshots folder)
     # and have screenshot extensions, but aren't screenshots and therefore
@@ -3483,6 +3496,20 @@ class ScreenInfos(FileInfos):
 
     @property
     def bash_dir(self): return dirs[u'modsBash'].join(u'Screenshot Data')
+
+#------------------------------------------------------------------------------
+class SEPluginInfos(FileInfos):
+    """Collection of xSE plugins. This is the backend of the SE Plugins tab."""
+    _bain_notify = True
+
+    def __init__(self):
+        self.__class__.file_pattern = re.compile(r'\.(dll)$', re.I)
+        super().__init__(dirs['mods'].join(bush.game.Se.plugin_dir, 'Plugins'),
+            factory=SEPluginInfo)
+
+    @property
+    def bash_dir(self):
+        return dirs['modsBash'].join('SEPluginsData')
 
 #------------------------------------------------------------------------------
 # Hack below needed as older Converters.dat expect bosh.InstallerConverter

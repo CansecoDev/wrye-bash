@@ -4560,10 +4560,10 @@ class BashApp(object):
             #--Init Data
             progress(0.2, _(u'Initializing Data'))
             self.InitData(progress)
-            progress(0.7, _(u'Initializing Version'))
+            progress(0.8, _(u'Initializing Version'))
             self.InitVersion()
             #--MWFrame
-            progress(0.8, _(u'Initializing Windows'))
+            progress(0.9, _(u'Initializing Windows'))
             frame = BashFrame() # Link.Frame global set here
             progress(1.0, _(u'Done'))
         if splash_screen:
@@ -4594,11 +4594,14 @@ class BashApp(object):
         progress(0.6, _(u'Initializing INIs'))
         bosh.iniInfos = bosh.INIInfos()
         bosh.iniInfos.refresh(refresh_target=False)
+        progress(0.7, _('Initializing SE Plugins'))
+        bosh.se_plugin_infos = bosh.SEPluginInfos()
+        bosh.se_plugin_infos.refresh(booting=True)
         # screens/installers data are refreshed upon showing the panel
         #--Patch check
         if bush.game.Esp.canBash:
             if not bosh.modInfos.bashed_patches and bass.inisettings[u'EnsurePatchExists']:
-                progress(0.68, _(u'Generating Blank Bashed Patch'))
+                progress(0.75, _(u'Generating Blank Bashed Patch'))
                 try:
                     bosh.modInfos.generateNextBashedPatch(selected_mods=())
                 except: # YAK but this may blow and has blown on whatever coding error, crashing Bash on boot
