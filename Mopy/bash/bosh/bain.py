@@ -1213,7 +1213,7 @@ class _InstallerPackage(Installer, AFile):
             # since plugins may have been renamed
             for store, file_tracker in affected_stores:
                 ##: Is the str() needed here? need to type some tough APIs like refreshDataSizeCrc
-                if fname_key := store.rel_path_to_key(str(dest)):
+                if fname_key := store.data_path_to_key(str(dest)):
                     file_tracker.add(fname_key)
             data_sizeCrcDate_update[dest] = (dest_size, crc, -1) ##: HACK we must try avoid stat'ing the mtime
             # Append the ghost extension JIT since the FS operation below will
@@ -2300,8 +2300,8 @@ class InstallersData(DataStore):
         _pjoin = os.path.join
         inst_dir = bass.dirs['mods'].s # should be normalized
         root_files = []
-        for data_path in dest_paths:
-            sp = data_path.rsplit(os_sep, 1) # split into ['rel_path, 'file']
+        for data_dest in dest_paths:
+            sp = data_dest.rsplit(os_sep, 1) # split into ['rel_path, 'file']
             root_files.append((inst_dir if len(sp) == 1  # top level file
                                else _pjoin(inst_dir, sp[0]), sp[-1]))
         root_files.sort(key=itemgetter(0)) # must sort on same key as groupby
@@ -2623,7 +2623,7 @@ class InstallersData(DataStore):
             path = mods_dir_join(norm_ghost_get(ci_rel_path, ci_rel_path))
             if path.exists():
                 for store, removed_files in removed_tracked:
-                    if fname_key := store.rel_path_to_key(path):
+                    if fname_key := store.data_path_to_key(path):
                         removed_files.add(fname_key)
                 else:
                     removed_untracked.add(path)
@@ -2735,7 +2735,7 @@ class InstallersData(DataStore):
             for ikey, owned_files in cede_ownership.items():
                 for owned_path in owned_files:
                     for store in data_tracking_stores():
-                        if fname_key := store.rel_path_to_key(owned_path):
+                        if fname_key := store.data_path_to_key(owned_path):
                             store[fname_key].set_table_prop(
                                 'installer', '%s' % ikey)
                             refresh_ui[store.unique_store_key] = True

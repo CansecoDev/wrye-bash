@@ -1564,11 +1564,11 @@ class TableFileInfos(DataStore):
         :rtype: _sre.SRE_Match | None"""
         return cls.file_pattern.search(fileName)
 
-    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
+    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
         """Return an FName representing the key of the specified Data
         folder-relative file path inside this data store iff it belongs to this
         data store. If it does not, return None."""
-        ret_candidate = FName(os.path.basename(rel_path))
+        ret_candidate = FName(os.path.basename(data_path))
         return ret_candidate if self.rightFileType(ret_candidate) else None
 
     #--Delete
@@ -1843,15 +1843,15 @@ class INIInfos(TableFileInfos):
         self.ini = list(bass.settings[u'bash.ini.choices'].values())[
             bass.settings[u'bash.ini.choice']]
 
-    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
-        ci_parts = os.path.split(rel_path.lower())
+    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
+        ci_parts = os.path.split(data_path.lower())
         # 1. Must have a single parent folder
         # 2. That folder must be named 'ini tweaks' (case-insensitively)
         # 3. The extension must be a valid INI-like extension
         if (len(ci_parts) == 2 and
                 ci_parts[0] == 'ini tweaks' and
                 ci_parts[1].rsplit('.', 1)[1] in supported_ini_exts):
-            return super().rel_path_to_key(rel_path)
+            return super().data_path_to_key(data_path)
         return None
 
     @property
@@ -3289,8 +3289,7 @@ class SaveInfos(FileInfos):
     def rightFileType(cls, fileName: bolt.FName | str):
         return all(cls._parse_save_path(fileName))
 
-    @classmethod
-    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
+    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
         return None # Never relative to Data folder
 
     @classmethod
@@ -3520,19 +3519,19 @@ class ScreenInfos(FileInfos):
             return False
         return super().rightFileType(fileName)
 
-    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
+    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
         if not self._rel_to_data:
             # Current store_dir is not relative to Data folder, so we do not
             # need to pay attention to BAIN
             return None
-        ci_parts = os.path.split(rel_path.lower())
+        ci_parts = os.path.split(data_path.lower())
         prefix_len = len(self._ci_curr_data_prefix)
         # The parent directories must match and the length must be +1 (for the
         # filename itself)
         if (len(ci_parts) != prefix_len + 1 or
                 ci_parts[:prefix_len] != self._ci_curr_data_prefix):
             return None
-        return super().rel_path_to_key(rel_path)
+        return super().data_path_to_key(data_path)
 
     def refresh(self, refresh_infos=True, booting=False):
         # Check if we need to adjust the screenshot dir
