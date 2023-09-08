@@ -153,12 +153,15 @@ class Installers_Link(ItemLink):
 #--Information about the various Tabs
 tabInfo = {
     # InternalName: [className, title, instance]
-    u'Installers': [u'InstallersPanel', _(u'Installers'), None],
-    u'Mods': [u'ModPanel', _(u'Mods'), None],
-    u'Saves': [u'SavePanel', _(u'Saves'), None],
-    u'INI Edits': [u'INIPanel', _(u'INI Edits'), None],
-    u'Screenshots': [u'ScreensPanel', _(u'Screenshots'), None],
-    # u'BSAs':[u'BSAPanel', _(u'BSAs'), None],
+    'Installers': ['InstallersPanel', _('Installers'), None],
+    'Mods': ['ModPanel', _('Mods'), None],
+    'Saves': ['SavePanel', _('Saves'), None],
+    'SEPlugins': ['SEPluginPanel', _('%(xse_abbrev)s Plugins') % {
+        'xse_abbrev': bush.game.Se.se_abbrev,
+    }, None],
+    # 'BSAs': ['BSAPanel', _('BSAs'), None],
+    'INI Edits': ['INIPanel', _('INI Edits'), None],
+    'Screenshots': ['ScreensPanel', _('Screenshots'), None],
 }
 
 #------------------------------------------------------------------------------
@@ -224,7 +227,10 @@ class SashPanel(NotebookPanel):
 class SashUIListPanel(SashPanel):
     """SashPanel featuring a UIList and a corresponding listData datasource."""
     listData = None
-    _status_str = 'OVERRIDE: %(status_num)d'
+    # The 'counter' string shown in the status bar. May be formatted with
+    # '%(status_num)s'. If you need more complicated formatting than that,
+    # override _sbCount
+    _status_str: str
     _ui_list_type: type[UIList] = None
 
     def __init__(self, parent, isVertical=True):
@@ -236,8 +242,8 @@ class SashUIListPanel(SashPanel):
         self.uiList.SelectAndShowItem(item, deselectOthers=deselectOthers,
                                       focus=True)
 
-    def _sbCount(self): return self.__class__._status_str % {
-        'status_num': len(self.listData)}
+    def _sbCount(self):
+        return self.__class__._status_str % {'status_num': len(self.listData)}
 
     def SetStatusCount(self):
         """Sets status bar count field."""
@@ -2190,6 +2196,7 @@ class INIDetailsPanel(_DetailsMixin, SashPanel):
 
 class INIPanel(BashTab):
     keyPrefix = u'bash.ini'
+    _status_str = _('Tweaks: %(status_num)d/%(total_status_num)d')
     _ui_list_type = INIList
     _details_panel_type = INIDetailsPanel
 
@@ -2224,7 +2231,7 @@ class INIPanel(BashTab):
 
     def _sbCount(self):
         stati = self.uiList.CountTweakStatus()
-        return _('Tweaks: %(status_num)d/%(total_status_num)d') % {
+        return self.__class__._status_str % {
             'status_num': stati[0], 'total_status_num': sum(stati[:-1])}
 
 #------------------------------------------------------------------------------
@@ -3407,6 +3414,7 @@ class InstallersPanel(BashTab):
     espmMenu = Links()
     subsMenu = Links()
     keyPrefix = u'bash.installers'
+    _status_str = _('Packages: %(status_num)d/%(total_status_num)d')
     _ui_list_type = InstallersList
     _details_panel_type = InstallersDetails
 
@@ -3568,7 +3576,7 @@ class InstallersPanel(BashTab):
 
     def _sbCount(self):
         active = sum(x.is_active for x in self.listData.values())
-        return _('Packages: %(status_num)d/%(total_status_num)d') % {
+        return self.__class__._status_str % {
             'status_num': active, 'total_status_num': len(self.listData)}
 
     def RefreshUIMods(self, ui_refresh):
@@ -3702,7 +3710,7 @@ class ScreensDetails(_DetailsMixin, NotebookPanel):
 class ScreensPanel(BashTab):
     """Screenshots tab."""
     keyPrefix = u'bash.screens'
-    _status_str = _('Screens: %(status_num)d')
+    _status_str = _('Screenshots: %(status_num)d')
     _ui_list_type = ScreensList
     _details_panel_type = ScreensDetails
 
@@ -3769,7 +3777,7 @@ class BSADetails(_EditableMixinOnFileInfos, SashPanel):
         """Set file to be viewed."""
         fileName = super(BSADetails, self).SetFile(fileName)
         if fileName:
-            self._bsa_info = bosh.bsaInfos[fileName]
+            self._bsa_info = self.file_infos[fileName]
             #--Remember values for edit checks
             self.fileStr = self._bsa_info.fn_key
             self.gInfo.text_content = self._bsa_info.get_table_prop('info',
@@ -3805,6 +3813,104 @@ class BSAPanel(BashTab):
         self.listData = bosh.bsaInfos
         super(BSAPanel, self).__init__(parent)
         BashFrame.bsaList = self.uiList
+
+#------------------------------------------------------------------------------
+class SEPluginList(UIList):
+    """The UIList backing the xSE Plugins tab."""
+    column_links = Links() # Column menu
+    context_links = Links() # Single item menu
+    global_links = defaultdict(lambda: Links()) # Global menu
+    _sort_keys = {
+        'File'    : None,
+        'Modified': lambda self, a: self.data_store[a].mtime,
+        'Size'    : lambda self, a: self.data_store[a].fsize,
+    }
+    labels = {
+        'File':     lambda self, p: p,
+        'Modified': lambda self, p: format_date(self.data_store[p].mtime),
+        'Size':     lambda self, p: round_size(self.data_store[p].fsize),
+    }
+
+    def set_item_format(self, sep_name, item_format, target_ini_setts):
+        sep_checkmark = self.data_store.plugin_checkmark(sep_name)
+        item_format.icon_key = 0, sep_checkmark
+
+#------------------------------------------------------------------------------
+class SEPluginDetails(_EditableMixinOnFileInfos, SashPanel):
+    """Details panel for the xSE Plugins tab."""
+
+    @property
+    def file_info(self):
+        return self._sep_info
+
+    @property
+    def file_infos(self):
+        return bosh.se_plugin_infos
+
+    @property
+    def allowDetailsEdit(self):
+        return True
+
+    def __init__(self, parent, ui_list_panel):
+        SashPanel.__init__(self, parent, isVertical=False)
+        top, bottom = self.left, self.right
+        _EditableMixinOnFileInfos.__init__(self, bottom, ui_list_panel)
+        self._sep_info = None
+        self._notes_text = TextArea(bottom)
+        self._notes_text.on_text_changed.subscribe(self.OnInfoEdit)
+        VLayout(item_expand=True, items=[
+            Label(top, _('File:')), self._fname_ctrl]).apply_to(top)
+        VLayout(spacing=4, items=[
+            Label(bottom, _('Notes:')),
+            (self._notes_text, LayoutOptions(expand=True)),
+            HLayout(spacing=4, items=[self._save_btn, self._cancel_btn])
+        ]).apply_to(bottom)
+
+    def _resetDetails(self):
+        self._sep_info = None
+        self.fileStr = ''
+
+    def SetFile(self, fileName=_same_file):
+        fileName = super().SetFile(fileName)
+        if fileName:
+            self._sep_info = bosh.se_plugin_infos[fileName]
+            self.fileStr = self._sep_info.fn_key
+            self._notes_text.text_content = self._sep_info.get_table_prop(
+                'info', '')
+        else:
+            self._notes_text.text_content = ''
+        self._fname_ctrl.text_content = self.fileStr
+        self._notes_text.modified = False
+
+    def OnInfoEdit(self, new_text):
+        """Info field was edited."""
+        if self._sep_info and self._notes_text.modified:
+            self._sep_info.set_table_prop('info', new_text)
+
+    @balt.conversation
+    def DoSave(self):
+        new_sep_name = FName(self.fileStr.strip())
+        if new_sep_name != self._sep_info.fn_key:
+            if self.panel_uilist.try_rename(self._sep_info, new_sep_name):
+                self.panel_uilist.RefreshUI(detail_item=self.file_info.fn_key)
+
+#------------------------------------------------------------------------------
+class SEPluginPanel(BashTab):
+    """xSE Plugins tab."""
+    keyPrefix = 'bash.se_plugins'
+    _status_str = _('%(xse_abbrev)s Plugins: %(status_num)d')
+    _ui_list_type = SEPluginList
+    _details_panel_type = SEPluginDetails
+
+    def __init__(self, parent):
+        self.listData = bosh.se_plugin_infos
+        super().__init__(parent)
+        BashFrame.se_plugins_list = self.uiList
+
+    def _sbCount(self):
+        return self.__class__._status_str % {
+            'xse_abbrev': bush.game.Se.se_abbrev,
+            'status_num': len(self.listData)}
 
 #--Tabs menu ------------------------------------------------------------------
 _widget_to_panel = {}
@@ -3871,9 +3977,14 @@ class _Tab_Link(AppendableLink, CheckLink, EnabledLink):
 class BashNotebook(wx.Notebook, balt.TabDragMixin):
 
     # default tabs order and default enabled state, keys as in tabInfo
-    _tabs_enabled_ordered = {'Installers': True, 'Mods': True, 'Saves': True,
-                             'INI Edits': True, 'Screenshots': True,
-                            # ('BSAs', False),
+    _tabs_enabled_ordered = {
+        'Installers': True,
+        'Mods': True,
+        'Saves': True,
+        'SEPlugins': True,
+        # ('BSAs', True),
+        'INI Edits': True,
+        'Screenshots': True,
     }
 
     @staticmethod
@@ -3889,6 +4000,10 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         for d in deleted: del newOrder[d]
         # Ensure the 'Mods' tab is always shown
         if u'Mods' not in newOrder: newOrder[u'Mods'] = True # inserts last
+        # Ensure the 'xSE Plugins' tab is only shown if the game has a script
+        # extender
+        if not bush.game.Se.se_abbrev:
+            del newOrder['SEPlugins']
         settings[u'bash.tabs.order'] = newOrder
         return newOrder
 

@@ -102,7 +102,7 @@ colorInfo = {
           'performed to make the install match what is configured.'),
     ),
     'screens.bkgd.image': (_('Screenshot Background'),
-        _('Tabs: Saves, Screens') + '\n\n' +
+        _('Tabs: Saves, Screenshots') + '\n\n' +
         _('This is the background color used for images.'),
     ),
 }
@@ -223,7 +223,7 @@ settingDefaults = { # keep current naming format till refactored
         'installers.bkgd.skipped':      (224, 224, 224),
         'installers.bkgd.outOfOrder':   (255, 255, 0),
         'installers.bkgd.dirty':        (255, 187, 51),
-        #--Screens Tab
+        #--Screenshots Tab
         'screens.bkgd.image':           (100, 100, 100),
     },
     #--BSA Redirection
@@ -422,7 +422,7 @@ settingDefaults = { # keep current naming format till refactored
         'Modified': 150,
         'Size': 75,
     },
-    #--Wrye Bash: Screens
+    #--Wrye Bash: Screenshots
     'bash.screens.cols': ['File', 'Modified', 'Size'],
     'bash.screens.sort': 'File',
     'bash.screens.colReverse': {
@@ -435,6 +435,17 @@ settingDefaults = { # keep current naming format till refactored
     },
     'bash.screens.jpgQuality': 95,
     'bash.screens.jpgCustomQuality': 75,
+    #--Wrye Bash: xSE Plugins
+    'bash.se_plugins.cols': ['File', 'Modified', 'Size'],
+    'bash.se_plugins.sort': 'File',
+    'bash.se_plugins.colReverse': {
+        'Modified': True,
+    },
+    'bash.se_plugins.colWidths': {
+        'File': 150,
+        'Modified': 150,
+        'Size': 75,
+    },
     #--BOSS/LOOT:
     'BOSS.ClearLockTimes': True,
     'BOSS.UseGUI': False,

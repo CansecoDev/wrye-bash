@@ -25,13 +25,12 @@ are the DataStore singletons and bolt.AFile subclasses populating the data
 stores. bush.game must be set, to properly instantiate the data stores."""
 from __future__ import annotations
 
-import collections
 import io
 import os
 import pickle
 import re
 import sys
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 from collections.abc import Iterable
 from functools import wraps
 from itertools import chain
@@ -1886,7 +1885,7 @@ class INIInfos(TableFileInfos):
         len_inis = len(game_inis)
         keys.sort(key=lambda a: game_inis.index(a) if a in game_inis else (
                       len_inis + 1 if a == _(u'Browse...') else len_inis))
-        bass.settings[u'bash.ini.choices'] = collections.OrderedDict(
+        bass.settings[u'bash.ini.choices'] = OrderedDict(
             # convert stray Path instances back to unicode
             [(f'{k}', bass.settings['bash.ini.choices'][k]) for k in keys])
 
@@ -2073,10 +2072,10 @@ class ModInfos(FileInfos):
             raise FileError(bush.game.master_file,
                             u'File is required, but could not be found')
         # Maps plugins to 'real indices', i.e. the ones the game will assign.
-        self.real_indices = collections.defaultdict(lambda: sys.maxsize)
-        self.real_index_strings = collections.defaultdict(lambda: '')
+        self.real_indices = defaultdict(lambda: sys.maxsize)
+        self.real_index_strings = defaultdict(lambda: '')
         # Maps each plugin to a set of all plugins that have it as a master
-        self.dependents = collections.defaultdict(set)
+        self.dependents = defaultdict(set)
         self.mergeable = set() #--Set of all mods which can be merged.
         self.bad_names = set() #--Set of all mods with names that can't be saved to plugins.txt
         self.missing_strings = set() #--Set of all mods with missing .STRINGS files
@@ -3418,7 +3417,7 @@ class BSAInfos(FileInfos):
     # BSAs that have versions other than the one expected for the current game
     mismatched_versions = set()
     # Maps BA2 hashes to BA2 names, used to detect collisions
-    _ba2_hashes = collections.defaultdict(set)
+    _ba2_hashes = defaultdict(set)
     ba2_collisions = set()
     unique_store_key = 'bsa_store'
 
@@ -3495,7 +3494,8 @@ class BSAInfos(FileInfos):
 
 #------------------------------------------------------------------------------
 class ScreenInfos(FileInfos):
-    """Collection of screenshots. This is the backend of the Screens tab."""
+    """Collection of screenshots. This is the backend of the Screenshots
+    tab."""
     # Files that go in the main game folder (aka default screenshots folder)
     # and have screenshot extensions, but aren't screenshots and therefore
     # shouldn't be managed here - right now only ENB stuff
@@ -3568,6 +3568,44 @@ class SEPluginInfos(FileInfos):
     @property
     def bash_dir(self):
         return dirs['modsBash'].join('SEPluginsData')
+
+    def refresh(self, refresh_infos=True, booting=False):
+        ##: Maybe track the log as an AFile?
+        self._plugin_order = self._parse_xse_log()
+        return super().refresh(refresh_infos, booting)
+
+    def plugin_checkmark(self, sep_key):
+        sep_state = self._plugin_order[sep_key]
+        if sep_state is None: return 0
+        elif sep_state: return 1
+        else: return 2
+
+    _good_line = re.compile(r'^plugin .+(\w+\.dll).+ loaded correctly$')
+    _bad_line = re.compile(r'^plugin .+(\w+\.dll).+ reported as incompatible '
+                           r'during query$')
+    def _parse_xse_log(self) -> defaultdict[FName, bool | None]:
+        """Parse the xSE log for this game and return the plugin load order
+        along with a boolean indicating if the load was successful or not (None
+        if the plugin was not an xSE plugin at all or was not present during
+        the last load)."""
+        # Ugh, PyCharm needs this verbose type declaration to stop complaining
+        plugin_order: defaultdict[FName, bool | None] = defaultdict(
+            lambda: None)
+        try:
+            # FIXME encoding? Assuming UTF-8 for now, check that
+            with open(dirs['saveBase'].join(*bush.game.Se.se_log), 'r',
+                    encoding='utf-8') as ins:
+                for xse_line in ins:
+                    ma_good = self._good_line.match(xse_line)
+                    if ma_good:
+                        plugin_order[FName(ma_good.group(1))] = True
+                    else:
+                        ma_bad = self._bad_line.match(xse_line)
+                        if ma_bad:
+                            plugin_order[FName(ma_bad.group(1))] = False
+        except FileNotFoundError:
+            pass # That's fine, xSE is not installed or was not run yet
+        return plugin_order
 
 #------------------------------------------------------------------------------
 # Hack below needed as older Converters.dat expect bosh.InstallerConverter
