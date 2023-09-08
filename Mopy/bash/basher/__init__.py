@@ -3571,14 +3571,14 @@ class InstallersPanel(BashTab):
         return _('Packages: %(status_num)d/%(total_status_num)d') % {
             'status_num': active, 'total_status_num': len(self.listData)}
 
-    def RefreshUIMods(self, mods_changed, inis_changed):
+    def RefreshUIMods(self, ui_refresh):
         """Refresh UI plus refresh mods state."""
         self.uiList.RefreshUI()
-        if mods_changed:
+        if ui_refresh[BashFrame.modList.data_store_key]:
             BashFrame.modList.RefreshUI(refreshSaves=True, focus_list=False)
             Link.Frame.warn_corrupted(warn_mods=True, warn_strings=True)
             Link.Frame.warn_load_order()
-        if inis_changed:
+        if ui_refresh[BashFrame.iniList.data_store_key]:
             if BashFrame.iniList is not None:
                 BashFrame.iniList.RefreshUI(focus_list=False)
         # TODO(ut) : add bsas_changed param! (or rather move this inside BAIN)
@@ -4085,6 +4085,7 @@ class BashFrame(WindowFrame):
     iniList = None
     modList = None
     bsaList = None
+    se_plugins_list = None
     # Panels - use sparingly
     iPanel = None # BAIN panel
     # initial size/position
@@ -4233,7 +4234,7 @@ class BashFrame(WindowFrame):
         if not evt_active or self.inRefreshData: return
         #--UPDATES-----------------------------------------
         self.inRefreshData = True
-        popMods = popSaves = popBsas = None
+        popMods = popSaves = popBsas = pop_se_plugins = None
         #--Config helpers
         initialization.lootDb.refreshBashTags()
         #--Check bsas, needed to detect string files in modInfos refresh...
@@ -4246,6 +4247,8 @@ class BashFrame(WindowFrame):
         #--Check savegames directory...
         if not booting and bosh.saveInfos.refresh():
             popSaves = u'ALL'
+        if not booting and bosh.se_plugin_infos.refresh():
+            pop_se_plugins = 'ALL'
         #--Repopulate, focus will be set in ShowPanel
         if popMods:
             BashFrame.modList.RefreshUI(refreshSaves=True, # True just in case
@@ -4254,6 +4257,8 @@ class BashFrame(WindowFrame):
             BashFrame.saveListRefresh(focus_list=False)
         if popBsas:
             BashFrame.bsaListRefresh(focus_list=False)
+        if pop_se_plugins:
+            BashFrame.se_plugins_list_refresh(focus_list=False)
         #--Show current notebook panel
         if self.iPanel: self.iPanel.frameActivated = True
         self.notebook.currentPage.ShowPanel(refresh_infos=not booting,
@@ -4503,6 +4508,11 @@ class BashFrame(WindowFrame):
     def bsaListRefresh(focus_list):
         if BashFrame.bsaList:
             BashFrame.bsaList.RefreshUI(focus_list=focus_list)
+
+    @staticmethod
+    def se_plugins_list_refresh(focus_list):
+        if BashFrame.se_plugins_list:
+            BashFrame.se_plugins_list.RefreshUI(focus_list=focus_list)
 
     # Global Menu API
     def set_global_menu(self, new_global_menu):

@@ -75,6 +75,11 @@ bsaInfos: BSAInfos | None = None
 screen_infos: ScreenInfos | None = None
 se_plugin_infos: SEPluginInfos | None = None
 
+def data_tracking_stores() -> Iterable[FileInfos]:
+    """Return an iterable containing all data stores that keep track of the
+    Data folder and which files in it are owned by which BAIN package."""
+    return modInfos, iniInfos, bsaInfos, se_plugin_infos
+
 #--Header tags
 # re does not support \p{L} - [^\W\d_] is almost equivalent (N vs Nd)
 reVersion = re.compile(
@@ -1505,6 +1510,9 @@ class DataStore(DataDict):
 class TableFileInfos(DataStore):
     _bain_notify = True # notify BAIN on deletions/updates ?
     file_pattern = None # subclasses must define this !
+    # Each subclass must define this. Used when information related to the
+    # store is passed between the GUI and the backend
+    unique_store_key: str
 
     def _initDB(self, dir_):
         self.store_dir = dir_ #--Path
@@ -1555,6 +1563,14 @@ class TableFileInfos(DataStore):
         """Check if the filetype (extension) is correct for subclass.
         :rtype: _sre.SRE_Match | None"""
         return cls.file_pattern.search(fileName)
+
+    @classmethod
+    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
+        """Return an FName representing the key of the specified Data
+        folder-relative file path inside this data store iff it belongs to this
+        data store. If it does not, return None."""
+        ret_candidate = FName(os.path.basename(rel_path))
+        return ret_candidate if cls.rightFileType(ret_candidate) else None
 
     #--Delete
     def files_to_delete(self, fileNames, **kwargs):
@@ -1775,6 +1791,7 @@ class INIInfos(TableFileInfos):
     :type data: dict[bolt.Path, IniInfo]"""
     file_pattern = re.compile('|'.join(
         f'\\{x}' for x in supported_ini_exts) + '$' , re.I)
+    unique_store_key = 'ini_store'
 
     def __init__(self):
         self._default_tweaks = FNDict((k, DefaultIniInfo(k, v)) for k, v in
@@ -1826,6 +1843,17 @@ class INIInfos(TableFileInfos):
         bass.settings[u'bash.ini.choice'] = choice if choice >= 0 else 0
         self.ini = list(bass.settings[u'bash.ini.choices'].values())[
             bass.settings[u'bash.ini.choice']]
+
+    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
+        ci_parts = os.path.split(rel_path.lower())
+        # 1. Must have a single parent folder
+        # 2. That folder must be named 'ini tweaks' (case-insensitively)
+        # 3. The extension must be a valid INI-like extension
+        if (len(ci_parts) == 2 and
+                ci_parts[0] == 'ini tweaks' and
+                ci_parts[1].rsplit('.', 1)[1] in supported_ini_exts):
+            return super().rel_path_to_key(rel_path)
+        return None
 
     @property
     def ini(self):
@@ -2032,6 +2060,7 @@ def _bsas_from_ini(bsa_ini, bsa_key, available_bsas):
 #------------------------------------------------------------------------------
 class ModInfos(FileInfos):
     """Collection of modinfos. Represents mods in the Data directory."""
+    unique_store_key = 'mod_store'
 
     def __init__(self):
         exts = '|'.join([f'\\{e}' for e in bush.game.espm_extensions])
@@ -3214,6 +3243,7 @@ class SaveInfos(FileInfos):
     # Enabled and disabled saves, no .bak files ##: needed?
     file_pattern = re.compile('(%s)(f?)$' % '|'.join(r'\.%s' % s for s in
         [bush.game.Ess.ext[1:], bush.game.Ess.ext[1:-1] + 'r']), re.I | re.U)
+    unique_store_key = 'save_store'
 
     def _setLocalSaveFromIni(self):
         """Read the current save profile from the oblivion.ini file and set
@@ -3259,6 +3289,10 @@ class SaveInfos(FileInfos):
     @classmethod
     def rightFileType(cls, fileName: bolt.FName | str):
         return all(cls._parse_save_path(fileName))
+
+    @classmethod
+    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
+        return None # Never relative to Data folder
 
     @classmethod
     def valid_save_exts(cls):
@@ -3388,6 +3422,7 @@ class BSAInfos(FileInfos):
     # Maps BA2 hashes to BA2 names, used to detect collisions
     _ba2_hashes = collections.defaultdict(set)
     ba2_collisions = set()
+    unique_store_key = 'bsa_store'
 
     def __init__(self):
         ##: Hack, this should not use display_name
@@ -3470,6 +3505,7 @@ class ScreenInfos(FileInfos):
     _ss_skips = {FName(s) for s in (
         'enblensmask.png', 'enbpalette.bmp', 'enbsunsprite.bmp',
         'enbsunsprite.tga', 'enbunderwaternoise.bmp')}
+    unique_store_key = 'screen_store'
 
     def __init__(self):
         self._orig_store_dir = dirs[u'app'] # type: bolt.Path
@@ -3484,6 +3520,10 @@ class ScreenInfos(FileInfos):
             # Some non-screenshot file, skip it
             return False
         return super().rightFileType(fileName)
+
+    @classmethod
+    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
+        return None # Never relative to Data folder
 
     def refresh(self, refresh_infos=True, booting=False):
         # Check if we need to adjust the screenshot dir
@@ -3501,6 +3541,7 @@ class ScreenInfos(FileInfos):
 class SEPluginInfos(FileInfos):
     """Collection of xSE plugins. This is the backend of the SE Plugins tab."""
     _bain_notify = True
+    unique_store_key = 'se_plugin_store'
 
     def __init__(self):
         self.__class__.file_pattern = re.compile(r'\.(dll)$', re.I)
