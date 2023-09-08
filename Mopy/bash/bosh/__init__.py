@@ -78,7 +78,7 @@ se_plugin_infos: SEPluginInfos | None = None
 def data_tracking_stores() -> Iterable[FileInfos]:
     """Return an iterable containing all data stores that keep track of the
     Data folder and which files in it are owned by which BAIN package."""
-    return modInfos, iniInfos, bsaInfos, se_plugin_infos
+    return modInfos, iniInfos, bsaInfos, screen_infos, se_plugin_infos
 
 #--Header tags
 # re does not support \p{L} - [^\W\d_] is almost equivalent (N vs Nd)
@@ -1564,13 +1564,12 @@ class TableFileInfos(DataStore):
         :rtype: _sre.SRE_Match | None"""
         return cls.file_pattern.search(fileName)
 
-    @classmethod
-    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
+    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
         """Return an FName representing the key of the specified Data
         folder-relative file path inside this data store iff it belongs to this
         data store. If it does not, return None."""
         ret_candidate = FName(os.path.basename(rel_path))
-        return ret_candidate if cls.rightFileType(ret_candidate) else None
+        return ret_candidate if self.rightFileType(ret_candidate) else None
 
     #--Delete
     def files_to_delete(self, fileNames, **kwargs):
@@ -1608,7 +1607,7 @@ class TableFileInfos(DataStore):
     def _notify_bain(self, deleted: set[Path] = frozenset(),
         altered: set[Path] = frozenset(), renamed: dict[Path, Path] = {}):
         """Note that all of these parameters need to be absolute paths!"""
-        if self.__class__._bain_notify:
+        if self._bain_notify:
             InstallersData.notify_external(deleted=deleted, altered=altered,
                                            renamed=renamed)
 
@@ -3498,7 +3497,6 @@ class BSAInfos(FileInfos):
 #------------------------------------------------------------------------------
 class ScreenInfos(FileInfos):
     """Collection of screenshots. This is the backend of the Screens tab."""
-    _bain_notify = False # BAIN can't install to game dir
     # Files that go in the main game folder (aka default screenshots folder)
     # and have screenshot extensions, but aren't screenshots and therefore
     # shouldn't be managed here - right now only ENB stuff
@@ -3508,22 +3506,33 @@ class ScreenInfos(FileInfos):
     unique_store_key = 'screen_store'
 
     def __init__(self):
-        self._orig_store_dir = dirs[u'app'] # type: bolt.Path
+        self._orig_store_dir: bolt.Path = dirs[u'app']
         self.__class__.file_pattern = re.compile(
             r'\.(' + '|'.join(ext[1:] for ext in ss_image_exts) + ')$',
             re.I | re.U)
         super(ScreenInfos, self).__init__(self._orig_store_dir,
                                           factory=ScreenInfo)
 
+    @classmethod
     def rightFileType(cls, fileName: bolt.FName | str):
         if fileName in cls._ss_skips:
             # Some non-screenshot file, skip it
             return False
         return super().rightFileType(fileName)
 
-    @classmethod
-    def rel_path_to_key(cls, rel_path: os.PathLike | str) -> FName | None:
-        return None # Never relative to Data folder
+    def rel_path_to_key(self, rel_path: os.PathLike | str) -> FName | None:
+        if not self._rel_to_data:
+            # Current store_dir is not relative to Data folder, so we do not
+            # need to pay attention to BAIN
+            return None
+        ci_parts = os.path.split(rel_path.lower())
+        prefix_len = len(self._ci_curr_data_prefix)
+        # The parent directories must match and the length must be +1 (for the
+        # filename itself)
+        if (len(ci_parts) != prefix_len + 1 or
+                ci_parts[:prefix_len] != self._ci_curr_data_prefix):
+            return None
+        return super().rel_path_to_key(rel_path)
 
     def refresh(self, refresh_infos=True, booting=False):
         # Check if we need to adjust the screenshot dir
@@ -3532,7 +3541,16 @@ class ScreenInfos(FileInfos):
         new_store_dir = self._orig_store_dir.join(ss_base.head)
         if self.store_dir != new_store_dir:
             self.store_dir = new_store_dir
-        return super(ScreenInfos, self).refresh(refresh_infos, booting)
+        # Also check if we're now relative to the Data folder and hence need to
+        # pay attention to BAIN
+        self._rel_to_data = self.store_dir.cs.startswith(bass.dirs['mods'].cs)
+        self._bain_notify = self._rel_to_data
+        if self._rel_to_data:
+            self._ci_curr_data_prefix = os.path.split(os.path.relpath(
+                self.store_dir, bass.dirs['mods']).lower())
+        else:
+            self._ci_curr_data_prefix = []
+        return super().refresh(refresh_infos, booting)
 
     @property
     def bash_dir(self): return dirs[u'modsBash'].join(u'Screenshot Data')
