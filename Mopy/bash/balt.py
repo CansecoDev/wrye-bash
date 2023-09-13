@@ -2199,6 +2199,7 @@ class DnDStatusBar(wx.StatusBar):
         self.UpdateIconSizes()
         #--Bind events
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_MOTION, self.mousemove)
         #--Setup Drag-n-Drop reordering
         self.dragging = wx.NOT_FOUND
         self.dragStart = 0
@@ -2239,16 +2240,21 @@ class DnDStatusBar(wx.StatusBar):
 
     def OnDragStart(self, event):
         self.dragging, button_link = self._getButtonIndex(event)
+        print(f'OnDragStart: {self.dragging=} {button_link} '
+              f'dragging={event.Dragging()} {event.EventType=}')
         if self.dragging != wx.NOT_FOUND:
             if not button_link.gButton._native_widget.HasCapture():
                 self.dragStart = event.GetPosition()[0]
                 button_link.gButton._native_widget.CaptureMouse()
+                print(f'OnDragStart: mouse captured {self.dragStart=}')
                 # Otherwise blows up on py3
                 button_link.gButton._native_widget.Bind(
                     wx.EVT_MOUSE_CAPTURE_LOST, lambda e: None)
         event.Skip()
 
-    def OnDragEndForced(self, event):
+    def OnDragEndForced(self, event): ##: WINDOWS ONLY
+        print(f'OnDragEndForced: {self.dragging=} {event=} parent='
+              f'{(p:= self.GetParent())} parent.IsActive={p.IsActive()}')
         if self.dragging == wx.NOT_FOUND or not self.GetParent().IsActive():
             # The event for clicking the button sends a force capture loss
             # message.  Ignore lost capture messages if we're the active
@@ -2259,6 +2265,8 @@ class DnDStatusBar(wx.StatusBar):
         event.Skip()
 
     def OnDragEnd(self, event):
+        print(f'OnDragEnd: {self.dragging=} {event=} {self.moved=} '
+              f'dragging={event.Dragging()}')
         if self.dragging != wx.NOT_FOUND:
             try:
                 if self.moved:
@@ -2267,8 +2275,8 @@ class DnDStatusBar(wx.StatusBar):
                             button.gButton._native_widget.ReleaseMouse()
                             break
             except:
-                # deprint(u'Exception while handling mouse up on button',
-                #         traceback=True)
+                deprint(u'Exception while handling mouse up on button',
+                        traceback=True)
                 pass
             self.dragging = wx.NOT_FOUND
             self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
@@ -2278,6 +2286,7 @@ class DnDStatusBar(wx.StatusBar):
         event.Skip()
 
     def OnDrag(self, event):
+        print(f'OnDrag: {self.dragging=} {event.Dragging()=}')
         if self.dragging != wx.NOT_FOUND:
             if abs(event.GetPosition()[0] - self.dragStart) > 4:
                 self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -2310,6 +2319,10 @@ class DnDStatusBar(wx.StatusBar):
             button_link.gButton.component_position = (xPos, yPos)
             xPos += self.iconsSize
         if event: event.Skip()
+
+    def mousemove(self, event):
+        print(f'mousemove {event=} {event.GetPosition()=}')
+        event.Skip()
 
 #------------------------------------------------------------------------------
 class NotebookPanel(PanelWin):

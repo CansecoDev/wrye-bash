@@ -120,6 +120,7 @@ class StatusBar_Button(ItemLink):
     def set_sb_button_tooltip(self): pass
 
     def Execute(self):
+        print(f'Execute: {self!r}')
         if self.gButton and self.gButton._native_widget.HasCapture():
             self.gButton._native_widget.ReleaseMouse()
 
