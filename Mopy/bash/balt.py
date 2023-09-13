@@ -2199,7 +2199,6 @@ class DnDStatusBar(wx.StatusBar):
         self.UpdateIconSizes()
         #--Bind events
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.Bind(wx.EVT_MOTION, self.mousemove)
         #--Setup Drag-n-Drop reordering
         self.dragging = wx.NOT_FOUND
         self.dragStart = 0
@@ -2237,13 +2236,8 @@ class DnDStatusBar(wx.StatusBar):
 
     def OnDragStart(self, event):
         self.dragging, button_link = self._getButtonIndex(event)
-        print(f'OnDragStart: {self.dragging=} {button_link} '
-              f'dragging={event.Dragging()} {event.EventType=}')
-        # event.Skip()
 
-    def OnDragEndForced(self, event): ##: WINDOWS ONLY
-        print(f'OnDragEndForced: {self.dragging=} {event=} parent='
-              f'{(p:= self.GetParent())} parent.IsActive={p.IsActive()}')
+    def OnDragEndForced(self, event):
         if self.dragging == wx.NOT_FOUND or not self.GetParent().IsActive():
             # The event for clicking the button sends a force capture loss
             # message.  Ignore lost capture messages if we're the active
@@ -2253,8 +2247,6 @@ class DnDStatusBar(wx.StatusBar):
         event.Skip()
 
     def OnDragEnd(self, event):
-        print(f'OnDragEnd: {self.dragging=} {event=} {self.moved=} '
-              f'dragging={event.Dragging()}')
         __, button_link = self._getButtonIndex(event)
         if self.dragging != wx.NOT_FOUND:
             self.__reset_drag()
@@ -2271,7 +2263,6 @@ class DnDStatusBar(wx.StatusBar):
         self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
 
     def OnDrag(self, event):
-        print(f'OnDrag: {self.dragging=} {event.Dragging()=}')
         if self.dragging != wx.NOT_FOUND:
             if abs(event.GetPosition()[0] - self.dragStart) > 4:
                 self.moved = True # just lost your chance to click the button
@@ -2305,10 +2296,6 @@ class DnDStatusBar(wx.StatusBar):
             button_link.gButton.component_position = (xPos, yPos)
             xPos += self.iconsSize
         if event: event.Skip()
-
-    def mousemove(self, event):
-        print(f'mousemove {event=} {event.GetPosition()=}')
-        event.Skip()
 
 #------------------------------------------------------------------------------
 class NotebookPanel(PanelWin):
