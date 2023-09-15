@@ -88,6 +88,8 @@ from ..gui import CENTER, BusyCursor, Button, CancelButton, CenteredSplash, \
     get_shift_down, read_files_from_clipboard_cb, showError, askYes, \
     showWarning, askWarning, showOk
 from ..localize import format_date
+from ..tab_comms import INIS_IF, KEY_BSAS, KEY_MODS, KEY_SAVES, MODS_IF, \
+    SAVES, SAVES_IF
 from ..update_checker import LatestVersion, UCThread
 
 #  - Make sure that python root directory is in PATH, so can access dll's.
@@ -1038,7 +1040,7 @@ class ModList(_ModsUIList):
             showError(self, f'{e}')
         first_impacted = load_order.cached_lo_tuple()[first_index]
         self.RefreshUI(redraw=self._lo_redraw_targets({first_impacted}),
-                       refreshSaves=True)
+                       refresh_others=SAVES)
 
     #--Populate Item
     def set_item_format(self, mod_name, item_format, target_ini_setts):
@@ -1145,12 +1147,6 @@ class ModList(_ModsUIList):
                 mouseText += message[1]
                 if message[0]: item_format.underline = True
         self.mouseTexts[mod_name] = mouseText
-
-    def RefreshUI(self, **kwargs):
-        """Refresh UI for modList - always specify refreshSaves explicitly."""
-        super(ModList, self).RefreshUI(**kwargs)
-        if kwargs.pop(u'refreshSaves', False):
-            Link.Frame.saveListRefresh(focus_list=False)
 
     # Events ------------------------------------------------------------------
     def OnDClick(self, lb_dex_and_flags):
@@ -1355,7 +1351,7 @@ class ModList(_ModsUIList):
             bosh.modInfos.cached_lo_save_active()
             self.__toggle_active_msg(changes)
             self.RefreshUI(redraw=self._lo_redraw_targets(touched),
-                           refreshSaves=True)
+                           refresh_others=SAVES)
 
     _activated_key = 0
     _deactivated_key = 1
@@ -1394,7 +1390,7 @@ class ModList(_ModsUIList):
         # Finally, we pass to _lo_redraw_targets to take all other relevant
         # details into account
         self.RefreshUI(redraw=self._lo_redraw_targets({curr_lo[low_diff]}),
-                       refreshSaves=True)
+                       refresh_others=SAVES)
 
     def lo_undo(self):
         """Undoes a load order change."""
@@ -1411,7 +1407,7 @@ class ModList(_ModsUIList):
             self.GetSelected())
         if new_patch_name is not None:
             self.ClearSelected(clear_details=True)
-            self.RefreshUI(redraw=[new_patch_name], refreshSaves=False)
+            self.RefreshUI(redraw=[new_patch_name], refresh_others=SAVES)
         else:
             showWarning(self, _('Unable to create new Bashed Patch: 10 Bashed '
                                 'Patches already exist!'))
@@ -1855,8 +1851,8 @@ class ModDetails(_ModsSavesDetails):
             self._set_date(modInfo)
             with load_order.Unlock():
                 bosh.modInfos.refresh(refresh_infos=False, _modTimesChange=True)
-            BashFrame.modList.RefreshUI( # refresh saves if lo changed
-                refreshSaves=not bush.game.using_txt_file)
+            self.panel_uilist.RefreshUI( # refresh saves if lo changed
+                refresh_others=SAVES_IF(not bush.game.using_txt_file))
             return
         #--Backup
         modInfo.makeBackup()
@@ -1890,10 +1886,10 @@ class ModDetails(_ModsSavesDetails):
         #--Done
         with load_order.Unlock():
             bosh.modInfos.refresh(refresh_infos=False, _modTimesChange=changeDate)
-        refreshSaves = detail_item is None or changeName or (
-            changeDate and not bush.game.using_txt_file)
-        self.panel_uilist.RefreshUI(refreshSaves=refreshSaves,
-                                    detail_item=detail_item)
+        should_refresh_saves = (detail_item is None or changeName or
+                                (changeDate and not bush.game.using_txt_file))
+        self.panel_uilist.RefreshUI(detail_item=detail_item,
+            refresh_others=SAVES_IF(should_refresh_saves))
 
     def _set_date(self, modInfo):
         modInfo.setmtime(time.mktime(time.strptime(self.modifiedStr)))
@@ -2710,13 +2706,8 @@ class InstallersList(UIList):
                         any(grouped) for grouped in zip(*refreshes)]
             #--Refresh UI
             if refreshNeeded or ex: # refresh the UI in case of an exception
-                if modsRefresh: BashFrame.modList.RefreshUI(refreshSaves=False,
-                                                            focus_list=False)
-                if iniRefresh and BashFrame.iniList is not None:
-                    # It will be None if the INI Edits Tab was hidden at
-                    # startup, and never initialized
-                    BashFrame.iniList.RefreshUI()
-                self.RefreshUI()
+                self.RefreshUI(refresh_others=(MODS_IF(modsRefresh) |
+                                               INIS_IF(iniRefresh)))
                 #--Reselected the renamed items
                 self.SelectItemsNoCallback(newselected)
             return EventResult.CANCEL
@@ -3423,6 +3414,7 @@ class InstallersPanel(BashTab):
         BashFrame.iPanel = self
         self.listData = bosh.bain.Installer.instData = bosh.bain.InstallersData()
         super(InstallersPanel, self).__init__(parent)
+        BashFrame.installers_list = self.uiList
         #--Refreshing
         self._data_dir_scanned = False
         self.refreshing = False
@@ -3579,20 +3571,6 @@ class InstallersPanel(BashTab):
         return self.__class__._status_str % {
             'status_num': active, 'total_status_num': len(self.listData)}
 
-    def RefreshUIMods(self, ui_refresh):
-        """Refresh UI plus refresh mods state."""
-        self.uiList.RefreshUI()
-        if ui_refresh[BashFrame.modList.data_store_key]:
-            BashFrame.modList.RefreshUI(refreshSaves=True, focus_list=False)
-            Link.Frame.warn_corrupted(warn_mods=True, warn_strings=True)
-            Link.Frame.warn_load_order()
-        if ui_refresh[BashFrame.iniList.data_store_key]:
-            if BashFrame.iniList is not None:
-                BashFrame.iniList.RefreshUI(focus_list=False)
-        # TODO(ut) : add bsas_changed param! (or rather move this inside BAIN)
-        bosh.bsaInfos.refresh()
-        Link.Frame.warn_corrupted(warn_bsas=True)
-
 #------------------------------------------------------------------------------
 class ScreensList(UIList):
     column_links = Links() #--Column menu
@@ -3718,6 +3696,7 @@ class ScreensPanel(BashTab):
         """Initialize."""
         self.listData = bosh.screen_infos = bosh.ScreenInfos()
         super(ScreensPanel, self).__init__(parent)
+        BashFrame.screens_list = self.uiList
 
     def ShowPanel(self, **kwargs):
         """Panel is shown. Update self.data."""
@@ -4196,10 +4175,12 @@ class BashFrame(WindowFrame):
     # UILists - use sparingly for inter Panel communication
     # modList is always set but for example iniList may be None (tab not
     # enabled).
+    installers_list = None
+    modList = None
     saveList = None
     iniList = None
-    modList = None
     bsaList = None
+    screens_list = None
     se_plugins_list = None
     # Panels - use sparingly
     iPanel = None # BAIN panel
@@ -4235,6 +4216,33 @@ class BashFrame(WindowFrame):
         self.known_older_form_versions = set()
         self.known_mismatched_version_bsas = set()
         self.known_ba2_collisions = set()
+
+    def distribute_ui_refresh(self, ui_refresh: defaultdict[str, bool]):
+        """Distribute a RefreshUI to all tabs, based on the specified
+        ui_refresh information."""
+        all_uilists = (self.installers_list, self.modList, self.saveList,
+                       self.iniList, self.bsaList, self.screens_list,
+                       self.se_plugins_list)
+        for candidate_uilist in all_uilists:
+            if (candidate_uilist is not None and
+                    ui_refresh[candidate_uilist.data_store_key]):
+                candidate_uilist.RefreshUI(focus_list=False)
+
+    def distribute_warnings(self, ui_refresh):
+        """Issue warnings for all tabs, based on the specified ui_refresh
+        information."""
+        # Issue warnings for the various tabs based on what was refreshed
+        ##: This could do with a better design
+        mods_were_refreshed = ui_refresh[KEY_MODS]
+        bsas_were_refreshed = ui_refresh[KEY_BSAS]
+        self.warn_corrupted(
+            warn_mods=mods_were_refreshed,
+            warn_strings=mods_were_refreshed or bsas_were_refreshed,
+            warn_bsas=bsas_were_refreshed,
+            warn_saves=ui_refresh[KEY_SAVES],
+        )
+        if mods_were_refreshed:
+            self.warn_load_order()
 
     @balt.conversation
     def warnTooManyModsBsas(self):
@@ -4354,26 +4362,17 @@ class BashFrame(WindowFrame):
         initialization.lootDb.refreshBashTags()
         #--Check bsas, needed to detect string files in modInfos refresh...
         bosh.oblivionIni.get_ini_language(cached=False) # reread ini language
-        if not booting and bosh.bsaInfos.refresh():
-            popBsas = u'ALL'
-        #--Check plugins.txt and mods directory...
-        if not booting and bosh.modInfos.refresh():
-            popMods = u'ALL'
-        #--Check savegames directory...
-        if not booting and bosh.saveInfos.refresh():
-            popSaves = u'ALL'
-        if not booting and bosh.se_plugin_infos.refresh():
-            pop_se_plugins = 'ALL'
+        ui_refresh = defaultdict(bool)
+        ##: Do we want to refresh any other stores here?
+        for store in (bosh.bsaInfos, bosh.modInfos, bosh.saveInfos,
+                      bosh.se_plugin_infos):
+            if not booting and store.refresh():
+                ui_refresh[store.unique_store_key] = True
+        if ui_refresh[KEY_MODS]:
+            ui_refresh |= SAVES
         #--Repopulate, focus will be set in ShowPanel
-        if popMods:
-            BashFrame.modList.RefreshUI(refreshSaves=True, # True just in case
-                                        focus_list=False)
-        elif popSaves:
-            BashFrame.saveListRefresh(focus_list=False)
-        if popBsas:
-            BashFrame.bsaListRefresh(focus_list=False)
-        if pop_se_plugins:
-            BashFrame.se_plugins_list_refresh(focus_list=False)
+        self.distribute_ui_refresh(ui_refresh)
+        self.distribute_warnings(ui_refresh)
         #--Show current notebook panel
         if self.iPanel: self.iPanel.frameActivated = True
         self.notebook.currentPage.ShowPanel(refresh_infos=not booting,
@@ -4613,21 +4612,6 @@ class BashFrame(WindowFrame):
                 back_path = backupDir.join(back_fname)
                 if back_fname.fn_body not in goodRoots and back_path.is_file():
                     back_path.remove()
-
-    @staticmethod
-    def saveListRefresh(focus_list):
-        if BashFrame.saveList:
-            BashFrame.saveList.RefreshUI(focus_list=focus_list)
-
-    @staticmethod
-    def bsaListRefresh(focus_list):
-        if BashFrame.bsaList:
-            BashFrame.bsaList.RefreshUI(focus_list=focus_list)
-
-    @staticmethod
-    def se_plugins_list_refresh(focus_list):
-        if BashFrame.se_plugins_list:
-            BashFrame.se_plugins_list.RefreshUI(focus_list=focus_list)
 
     # Global Menu API
     def set_global_menu(self, new_global_menu):

@@ -144,7 +144,7 @@ class Installers_MonitorExternalInstallation(Installers_Link):
         try:
             self.idata.bain_install([pr_path], ui_refresh, override=False)
         finally:
-            self.iPanel.RefreshUIMods(ui_refresh)
+            self.window.RefreshUI(refresh_others=ui_refresh)
         # Select new installer
         self.window.SelectLast()
 
@@ -183,7 +183,8 @@ class Installers_AnnealAll(Installers_Link):
             with balt.Progress(_('Annealing...')) as progress:
                 self.idata.bain_anneal(None, ui_refresh, progress=progress)
         finally:
-            self.iPanel.RefreshUIMods(ui_refresh)
+            self.window.RefreshUI(refresh_others=ui_refresh)
+            self.window.issue_warnings(warn_others=ui_refresh)
 
 #------------------------------------------------------------------------------
 class Installers_UninstallAllPackages(Installers_Link):
@@ -195,12 +196,12 @@ class Installers_UninstallAllPackages(Installers_Link):
     def Execute(self):
         """Uninstall all packages."""
         if not self._askYes(_('Really uninstall all packages?')): return
-        ui_refresh = defaultdict(dict)
+        ui_refresh = defaultdict(bool)
         try:
             with balt.Progress(_('Uninstalling...')) as progress:
                 self.idata.bain_uninstall_all(ui_refresh, progress=progress)
         finally:
-            self.iPanel.RefreshUIMods(ui_refresh)
+            self.window.RefreshUI(refresh_others=ui_refresh)
 
 #------------------------------------------------------------------------------
 class _AInstallers_Refresh(AppendableLink, Installers_Link):
@@ -275,7 +276,7 @@ class Installers_CleanData(Installers_Link):
                                  'contents...') % mdir_fmt, f'\n{" " * 65}'):
                 self.idata.clean_data_dir(ed_unknown, ui_refresh)
         finally:
-            self.iPanel.RefreshUIMods(ui_refresh)
+            self.window.RefreshUI(refresh_others=ui_refresh)
 
 #------------------------------------------------------------------------------
 class Installers_CreateNewProject(ItemLink):

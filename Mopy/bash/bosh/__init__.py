@@ -57,6 +57,8 @@ from ..exception import ArgumentError, BoltError, BSAError, CancelError, \
 from ..ini_files import AIniFile, DefaultIniFile, GameIni, IniFile, \
     OBSEIniFile, get_ini_type_and_encoding, supported_ini_exts
 from ..mod_files import ModFile, ModHeaderReader
+from ..tab_comms import KEY_BSAS, KEY_INIS, KEY_INSTALLERS, KEY_MODS, \
+    KEY_SAVES, KEY_SCREENSHOTS, KEY_SE_PLUGINS
 from ..wbtemp import TempFile
 
 # Singletons, Constants -------------------------------------------------------
@@ -1436,6 +1438,9 @@ class SEPluginInfo(FileInfo):
 class DataStore(DataDict):
     """Base class for the singleton collections of infos."""
     store_dir = empty_path # where the data sit, static except for SaveInfos
+    # Each subclass must define this. Used when information related to the
+    # store is passed between the GUI and the backend
+    unique_store_key: str
 
     def __init__(self, store_dict=None):
         super().__init__(FNDict() if store_dict is None else store_dict)
@@ -1509,9 +1514,6 @@ class DataStore(DataDict):
 class TableFileInfos(DataStore):
     _bain_notify = True # notify BAIN on deletions/updates ?
     file_pattern = None # subclasses must define this !
-    # Each subclass must define this. Used when information related to the
-    # store is passed between the GUI and the backend
-    unique_store_key: str
 
     def _initDB(self, dir_):
         self.store_dir = dir_ #--Path
@@ -1559,7 +1561,8 @@ class TableFileInfos(DataStore):
     #--Right File Type?
     @classmethod
     def rightFileType(cls, fileName: bolt.FName | str):
-        """Check if the filetype (extension) is correct for subclass.
+        """Check if the filetype is correct for subclass by checking the
+        basename (usually the extension but sometimes also the root).
         :rtype: _sre.SRE_Match | None"""
         return cls.file_pattern.search(fileName)
 
@@ -1567,6 +1570,7 @@ class TableFileInfos(DataStore):
         """Return an FName representing the key of the specified Data
         folder-relative file path inside this data store iff it belongs to this
         data store. If it does not, return None."""
+        # FName needed for ScreenInfos.rightFileType override
         ret_candidate = FName(os.path.basename(data_path))
         return ret_candidate if self.rightFileType(ret_candidate) else None
 
@@ -1789,7 +1793,7 @@ class INIInfos(TableFileInfos):
     :type data: dict[bolt.Path, IniInfo]"""
     file_pattern = re.compile('|'.join(
         f'\\{x}' for x in supported_ini_exts) + '$' , re.I)
-    unique_store_key = 'ini_store'
+    unique_store_key = KEY_INIS
 
     def __init__(self):
         self._default_tweaks = FNDict((k, DefaultIniInfo(k, v)) for k, v in
@@ -1843,7 +1847,7 @@ class INIInfos(TableFileInfos):
             bass.settings[u'bash.ini.choice']]
 
     def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
-        ci_parts = os.path.split(data_path.lower())
+        ci_parts = os.path.split(os.fspath(data_path).lower())
         # 1. Must have a single parent folder
         # 2. That folder must be named 'ini tweaks' (case-insensitively)
         # 3. The extension must be a valid INI-like extension
@@ -2058,7 +2062,7 @@ def _bsas_from_ini(bsa_ini, bsa_key, available_bsas):
 #------------------------------------------------------------------------------
 class ModInfos(FileInfos):
     """Collection of modinfos. Represents mods in the Data directory."""
-    unique_store_key = 'mod_store'
+    unique_store_key = KEY_MODS
 
     def __init__(self):
         exts = '|'.join([f'\\{e}' for e in bush.game.espm_extensions])
@@ -3241,7 +3245,7 @@ class SaveInfos(FileInfos):
     # Enabled and disabled saves, no .bak files ##: needed?
     file_pattern = re.compile('(%s)(f?)$' % '|'.join(r'\.%s' % s for s in
         [bush.game.Ess.ext[1:], bush.game.Ess.ext[1:-1] + 'r']), re.I | re.U)
-    unique_store_key = 'save_store'
+    unique_store_key = KEY_SAVES
 
     def _setLocalSaveFromIni(self):
         """Read the current save profile from the oblivion.ini file and set
@@ -3299,10 +3303,9 @@ class SaveInfos(FileInfos):
             return cls._valid_save_exts
         except AttributeError:
             std_save_ext = bush.game.Ess.ext[1:]
-            accepted_exts = {std_save_ext, std_save_ext[:-1] + u'r', u'bak'}
+            accepted_exts = {std_save_ext, std_save_ext[:-1] + 'r', 'bak'}
             # Add 'first backup' versions of the extensions too
-            for e in accepted_exts.copy():
-                accepted_exts.add(e + u'f')
+            accepted_exts.update(f'{e}f' for e in accepted_exts.copy())
             cls._valid_save_exts = accepted_exts
             return accepted_exts
 
@@ -3312,10 +3315,9 @@ class SaveInfos(FileInfos):
         """Parses the specified save name into root and extension, returning
         them as a tuple. If the save path does not point to a valid save,
         returns two Nones instead."""
-        accepted_exts = cls.valid_save_exts()
         save_root, save_ext = os.path.splitext(save_name)
         save_ext_trunc = save_ext[1:]
-        if save_ext_trunc.lower() not in accepted_exts:
+        if save_ext_trunc.lower() not in cls.valid_save_exts():
             # Can't be a valid save, doesn't end in ess/esr/bak
             return None, None
         cs_ext = bush.game.Se.cosave_ext[1:]
@@ -3419,7 +3421,7 @@ class BSAInfos(FileInfos):
     # Maps BA2 hashes to BA2 names, used to detect collisions
     _ba2_hashes = defaultdict(set)
     ba2_collisions = set()
-    unique_store_key = 'bsa_store'
+    unique_store_key = KEY_BSAS
 
     def __init__(self):
         ##: Hack, this should not use display_name
@@ -3502,42 +3504,22 @@ class ScreenInfos(FileInfos):
     _ss_skips = {FName(s) for s in (
         'enblensmask.png', 'enbpalette.bmp', 'enbsunsprite.bmp',
         'enbsunsprite.tga', 'enbunderwaternoise.bmp')}
-    unique_store_key = 'screen_store'
+    unique_store_key = KEY_SCREENSHOTS
 
     def __init__(self):
         self._orig_store_dir: bolt.Path = dirs[u'app']
         self.__class__.file_pattern = re.compile(
             r'\.(' + '|'.join(ext[1:] for ext in ss_image_exts) + ')$',
             re.I | re.U)
-        super(ScreenInfos, self).__init__(self._orig_store_dir,
+        self._set_store_dir()
+        super(ScreenInfos, self).__init__(self.store_dir,
                                           factory=ScreenInfo)
 
-    @classmethod
-    def rightFileType(cls, fileName: bolt.FName | str):
-        if fileName in cls._ss_skips:
-            # Some non-screenshot file, skip it
-            return False
-        return super().rightFileType(fileName)
-
-    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
-        if not self._rel_to_data:
-            # Current store_dir is not relative to Data folder, so we do not
-            # need to pay attention to BAIN
-            return None
-        ci_parts = os.path.split(data_path.lower())
-        prefix_len = len(self._ci_curr_data_prefix)
-        # The parent directories must match and the length must be +1 (for the
-        # filename itself)
-        if (len(ci_parts) != prefix_len + 1 or
-                ci_parts[:prefix_len] != self._ci_curr_data_prefix):
-            return None
-        return super().data_path_to_key(data_path)
-
-    def refresh(self, refresh_infos=True, booting=False):
+    def _set_store_dir(self):
         # Check if we need to adjust the screenshot dir
         ss_base = GPath(oblivionIni.getSetting(
             u'Display', u'SScreenShotBaseName', u'ScreenShot'))
-        new_store_dir = self._orig_store_dir.join(ss_base.head)
+        new_store_dir = self._orig_store_dir.join(ss_base.shead)
         if self.store_dir != new_store_dir:
             self.store_dir = new_store_dir
         # Also check if we're now relative to the Data folder and hence need to
@@ -3549,63 +3531,106 @@ class ScreenInfos(FileInfos):
                 self.store_dir, bass.dirs['mods']).lower())
         else:
             self._ci_curr_data_prefix = []
+
+    @classmethod
+    def rightFileType(cls, fileName: bolt.FName):
+        if fileName in cls._ss_skips:
+            # Some non-screenshot file, skip it
+            return False
+        return super().rightFileType(fileName)
+
+    def data_path_to_key(self, data_path: os.PathLike | str) -> FName | None:
+        if not self._rel_to_data:
+            # Current store_dir is not relative to Data folder, so we do not
+            # need to pay attention to BAIN
+            return None
+        ci_parts = os.path.split(os.fspath(data_path).lower())
+        prefix_len = len(self._ci_curr_data_prefix)
+        # The parent directories must match and the length must be +1 (for the
+        # filename itself)
+        if (len(ci_parts) != prefix_len + 1 or
+                ci_parts[:prefix_len] != self._ci_curr_data_prefix):
+            return None
+        return super().data_path_to_key(data_path)
+
+    def refresh(self, refresh_infos=True, booting=False):
+        self._set_store_dir()
         return super().refresh(refresh_infos, booting)
 
     @property
     def bash_dir(self): return dirs[u'modsBash'].join(u'Screenshot Data')
 
 #------------------------------------------------------------------------------
+class SELogFile(AFile):
+    def __init__(self):
+        self._loaded_plugins = set()
+        self._plugin_order: defaultdict[FName, int | None] = defaultdict(
+            lambda: None)
+        super().__init__(fullpath=dirs['saveBase'].join(bush.game.Se.se_log),
+            load_cache=True)
+
+    def _reset_cache(self, stat_tuple, **kwargs):
+        if kwargs['load_cache']:
+            self._parse_xse_log()
+        super()._reset_cache(stat_tuple, **kwargs)
+
+    _good_line = re.compile(r'^plugin .+?(\w+\.dll).+ loaded correctly$')
+    _bad_line = re.compile(r'^plugin .+?(\w+\.dll).+ reported as incompatible '
+                           r'during query$')
+    def _parse_xse_log(self):
+        """Parse the xSE log for this game and return the plugin load order
+        along with a boolean indicating if the load was successful or not (None
+        if the plugin was not an xSE plugin at all or was not present during
+        the last load)."""
+        # Ugh, PyCharm needs this verbose type declaration to stop complaining
+        try:
+            with open(self.abs_path, 'rb') as ins:
+                xse_log_lines = decoder(ins.read()).splitlines()
+        except FileNotFoundError:
+            pass # That's fine, we probably raced against a log deletion
+        except UnicodeDecodeError:
+            deprint('Failed to read xSE log due to decoding error',
+                traceback=True)
+        mark_loaded = self._loaded_plugins.add
+        curr_order = 0
+        for xse_line in xse_log_lines:
+            ma_good = self._good_line.match(xse_line)
+            if ma_good:
+                good_fname = FName(ma_good.group(1))
+                mark_loaded(good_fname)
+                self._plugin_order[good_fname] = curr_order
+                curr_order += 1
+            else:
+                ma_bad = self._bad_line.match(xse_line)
+                if ma_bad:
+                    self._plugin_order[FName(ma_bad.group(1))] = curr_order
+                    curr_order += 1
+
+#------------------------------------------------------------------------------
 class SEPluginInfos(FileInfos):
     """Collection of xSE plugins. This is the backend of the SE Plugins tab."""
     _bain_notify = True
-    unique_store_key = 'se_plugin_store'
+    unique_store_key = KEY_SE_PLUGINS
 
     def __init__(self):
         self.__class__.file_pattern = re.compile(r'\.(dll)$', re.I)
         super().__init__(dirs['mods'].join(bush.game.Se.plugin_dir, 'Plugins'),
             factory=SEPluginInfo)
+        self._se_log = SELogFile()
 
     @property
     def bash_dir(self):
         return dirs['modsBash'].join('SEPluginsData')
 
     def refresh(self, refresh_infos=True, booting=False):
-        ##: Maybe track the log as an AFile?
-        self._plugin_order = self._parse_xse_log()
-        return super().refresh(refresh_infos, booting)
+        se_log_updated = self._se_log.do_update()
+        return super().refresh(refresh_infos, booting) or se_log_updated
 
     def plugin_checkmark(self, sep_key):
-        sep_state = self._plugin_order[sep_key]
+        sep_state = None #self._plugin_order[sep_key]
         if sep_state is None: return 0
         elif sep_state: return 1
         else: return 2
-
-    _good_line = re.compile(r'^plugin .+(\w+\.dll).+ loaded correctly$')
-    _bad_line = re.compile(r'^plugin .+(\w+\.dll).+ reported as incompatible '
-                           r'during query$')
-    def _parse_xse_log(self) -> defaultdict[FName, bool | None]:
-        """Parse the xSE log for this game and return the plugin load order
-        along with a boolean indicating if the load was successful or not (None
-        if the plugin was not an xSE plugin at all or was not present during
-        the last load)."""
-        # Ugh, PyCharm needs this verbose type declaration to stop complaining
-        plugin_order: defaultdict[FName, bool | None] = defaultdict(
-            lambda: None)
-        try:
-            # FIXME encoding? Assuming UTF-8 for now, check that
-            with open(dirs['saveBase'].join(*bush.game.Se.se_log), 'r',
-                    encoding='utf-8') as ins:
-                for xse_line in ins:
-                    ma_good = self._good_line.match(xse_line)
-                    if ma_good:
-                        plugin_order[FName(ma_good.group(1))] = True
-                    else:
-                        ma_bad = self._bad_line.match(xse_line)
-                        if ma_bad:
-                            plugin_order[FName(ma_bad.group(1))] = False
-        except FileNotFoundError:
-            pass # That's fine, xSE is not installed or was not run yet
-        return plugin_order
 
 #------------------------------------------------------------------------------
 # Hack below needed as older Converters.dat expect bosh.InstallerConverter
