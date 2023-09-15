@@ -21,7 +21,7 @@
 #
 # =============================================================================
 """Menu items for the _item_ menu of the mods tab - their window attribute
-points to BashFrame.modList singleton."""
+points to ModList singleton."""
 
 import copy
 import io

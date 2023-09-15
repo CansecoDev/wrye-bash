@@ -22,7 +22,7 @@
 # =============================================================================
 
 """Menu items for the main and item menus of the saves tab - their window
-attribute points to BashFrame.saveList singleton."""
+attribute points to SaveList singleton."""
 
 import io
 import re

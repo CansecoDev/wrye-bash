@@ -23,7 +23,7 @@
 
 """Installer*: Menu items for the __item__ menu of the installer tab. Their
 window attribute points to the InstallersList singleton. Check before using
-BashFrame.iniList - can be None (ini panel not shown).
+IniList singleton - can be None (ini panel not shown).
 Installer_Espm_*: Menu items for the Plugin Filter list in the installer tab.
 Their window attribute points to the InstallersPanel singleton.
 Installer_Subs_*: Menu items for the Sub-Packages list in the installer tab.
@@ -416,11 +416,11 @@ class Installer_Wizard(_Installer_AWizardLink):
         #--Refresh after all the tweaks are applied
         if lastApplied is not None:
             target_updated = bosh.INIInfos.update_targets(new_targets)
-            if BashFrame.iniList is not None:
-                BashFrame.iniList.panel.detailsPanel.set_choice(
+            if (ini_uilist := BashFrame.all_uilists[KEY_INIS]) is not None:
+                ini_uilist.panel.detailsPanel.set_choice(
                     target_path.stail, reset_choices=target_updated)
-                BashFrame.iniList.panel.ShowPanel(focus_list=False,
-                                                  detail_item=lastApplied)
+                ini_uilist.panel.ShowPanel(focus_list=False,
+                                           detail_item=lastApplied)
             ui_refresh[KEY_INIS] = False
         if len(manuallyApply) > 0:
             message = _('The following INI Tweaks were not automatically '

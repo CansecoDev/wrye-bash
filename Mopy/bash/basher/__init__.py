@@ -88,8 +88,8 @@ from ..gui import CENTER, BusyCursor, Button, CancelButton, CenteredSplash, \
     get_shift_down, read_files_from_clipboard_cb, showError, askYes, \
     showWarning, askWarning, showOk
 from ..localize import format_date
-from ..tab_comms import INIS_IF, KEY_BSAS, KEY_MODS, KEY_SAVES, MODS_IF, \
-    SAVES, SAVES_IF
+from ..tab_comms import INIS_IF, KEY_BSAS, KEY_MODS, KEY_SAVES, MODS_IF, SAVES, \
+    SAVES_IF, KEY_INIS, KEY_INSTALLERS, KEY_SE_PLUGINS, KEY_SCREENSHOTS
 from ..update_checker import LatestVersion, UCThread
 
 #  - Make sure that python root directory is in PATH, so can access dll's.
@@ -833,8 +833,8 @@ class INIList(UIList):
             return False
         try:
             default_ini.copyTo(target_ini_file.abs_path)
-            if balt.Link.Frame.iniList:
-                balt.Link.Frame.iniList.panel.ShowPanel()
+            if ini_uilist := balt.Link.Frame.all_uilists[KEY_INIS]:
+                ini_uilist.panel.ShowPanel()
             else:
                 bosh.iniInfos.refresh(refresh_infos=False)
             return True
@@ -2199,7 +2199,6 @@ class INIPanel(BashTab):
     def __init__(self, parent):
         self.listData = bosh.iniInfos
         super(INIPanel, self).__init__(parent)
-        BashFrame.iniList = self.uiList
 
     def RefreshUIColors(self):
         self.uiList.RefreshUI(focus_list=False)
@@ -2239,7 +2238,6 @@ class ModPanel(BashTab):
     def __init__(self,parent):
         self.listData = bosh.modInfos
         super(ModPanel, self).__init__(parent)
-        BashFrame.modList = self.uiList
 
     def _sbCount(self):
         all_mods = load_order.cached_active_tuple()
@@ -2584,7 +2582,6 @@ class SavePanel(BashTab):
                             f'{bush.game.display_name}.')
         self.listData = bosh.saveInfos
         super(SavePanel, self).__init__(parent)
-        BashFrame.saveList = self.uiList
 
     def ClosePanel(self, destroy=False):
         bosh.saveInfos.profiles.save()
@@ -3414,7 +3411,6 @@ class InstallersPanel(BashTab):
         BashFrame.iPanel = self
         self.listData = bosh.bain.Installer.instData = bosh.bain.InstallersData()
         super(InstallersPanel, self).__init__(parent)
-        BashFrame.installers_list = self.uiList
         #--Refreshing
         self._data_dir_scanned = False
         self.refreshing = False
@@ -3696,7 +3692,6 @@ class ScreensPanel(BashTab):
         """Initialize."""
         self.listData = bosh.screen_infos = bosh.ScreenInfos()
         super(ScreensPanel, self).__init__(parent)
-        BashFrame.screens_list = self.uiList
 
     def ShowPanel(self, **kwargs):
         """Panel is shown. Update self.data."""
@@ -3791,7 +3786,6 @@ class BSAPanel(BashTab):
     def __init__(self,parent):
         self.listData = bosh.bsaInfos
         super(BSAPanel, self).__init__(parent)
-        BashFrame.bsaList = self.uiList
 
 #------------------------------------------------------------------------------
 class SEPluginList(UIList):
@@ -3884,7 +3878,6 @@ class SEPluginPanel(BashTab):
     def __init__(self, parent):
         self.listData = bosh.se_plugin_infos
         super().__init__(parent)
-        BashFrame.se_plugins_list = self.uiList
 
     def _sbCount(self):
         return self.__class__._status_str % {
@@ -3961,9 +3954,20 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         'Mods': True,
         'Saves': True,
         'SEPlugins': True,
-        # ('BSAs', True),
+        # 'BSAs': True,
         'INI Edits': True,
         'Screenshots': True,
+    }
+
+    ##: the ui keys should disappear but this will need some compat code (enum?)
+    _data_to_tab_key = {
+        KEY_INSTALLERS: 'Installers',
+        KEY_MODS: 'Mods',
+        KEY_SAVES: 'Saves',
+        KEY_SE_PLUGINS: 'SEPlugins',
+        KEY_BSAS: 'BSAs',
+        KEY_INIS: 'INI Edits',
+        KEY_SCREENSHOTS: 'Screenshots',
     }
 
     @staticmethod
@@ -4172,16 +4176,9 @@ class BashFrame(WindowFrame):
     ##:ex basher globals - hunt their use down - replace with methods - see #63
     docBrowser = None
     plugin_checker = None
-    # UILists - use sparingly for inter Panel communication
-    # modList is always set but for example iniList may be None (tab not
-    # enabled).
-    installers_list = None
-    modList = None
-    saveList = None
-    iniList = None
-    bsaList = None
-    screens_list = None
-    se_plugins_list = None
+    # UILists - use sparingly for inter Panel communication - may be None if
+    # the tab is not enabled
+    all_uilists: dict[str, UIList | None] = defaultdict(lambda: None)
     # Panels - use sparingly
     iPanel = None # BAIN panel
     # initial size/position
@@ -4220,12 +4217,8 @@ class BashFrame(WindowFrame):
     def distribute_ui_refresh(self, ui_refresh: defaultdict[str, bool]):
         """Distribute a RefreshUI to all tabs, based on the specified
         ui_refresh information."""
-        all_uilists = (self.installers_list, self.modList, self.saveList,
-                       self.iniList, self.bsaList, self.screens_list,
-                       self.se_plugins_list)
-        for candidate_uilist in all_uilists:
-            if (candidate_uilist is not None and
-                    ui_refresh[candidate_uilist.data_store_key]):
+        for list_key, candidate_uilist in self.all_uilists.items():
+            if candidate_uilist is not None and ui_refresh[list_key]:
                 candidate_uilist.RefreshUI(focus_list=False)
 
     def distribute_warnings(self, ui_refresh):
@@ -4357,7 +4350,6 @@ class BashFrame(WindowFrame):
         if not evt_active or self.inRefreshData: return
         #--UPDATES-----------------------------------------
         self.inRefreshData = True
-        popMods = popSaves = popBsas = pop_se_plugins = None
         #--Config helpers
         initialization.lootDb.refreshBashTags()
         #--Check bsas, needed to detect string files in modInfos refresh...
@@ -4402,10 +4394,11 @@ class BashFrame(WindowFrame):
         def mk_warning(lo_warn_msg: str, warning_plugins: Iterable[FName]):
             """Helper for creating a single warning change entry from the
             specified warning message and to-be-highlighted plugins."""
-            warning_dec_plugins = self.modList.decorate_tree_dict(
+            mod_uilist = self.all_uilists[KEY_MODS]
+            warning_dec_plugins = mod_uilist.decorate_tree_dict(
                 {p: [] for p in sorted(warning_plugins)})
             return LoadOrderSanitizedDialog.make_change_entry(
-                mods_list_images=self.modList._icons,
+                mods_list_images=mod_uilist._icons,
                 mods_change_desc=lo_warn_msg,
                 decorated_plugins=warning_dec_plugins)
         lo_warnings = []
@@ -4448,11 +4441,12 @@ class BashFrame(WindowFrame):
 
     def warn_corrupted(self, warn_mods=False, warn_saves=False,
                        warn_strings=False, warn_bsas=False):
-        def mk_warning(warn_msg: str, warning_items: Iterable[FName], *,
-                target_uil: UIList, target_tab_key: str):
+        def _mk_warning(warn_msg: str, warning_items: Iterable[FName],
+                        data_key: str):
             """Helper for creating a single warning change entry from the
             specified warning message and to-be-highlighted items, relative to
             the specified UIList/Tab."""
+            target_uil = self.all_uilists.get(data_key)
             if target_uil is not None:
                 warning_dec_items = target_uil.decorate_tree_dict(
                     {i: [] for i in sorted(warning_items)})
@@ -4462,78 +4456,68 @@ class BashFrame(WindowFrame):
                     i: (None, []) for i in sorted(warning_items)}
             return MultiWarningDialog.make_change_entry(
                 uil_images=target_uil._icons if target_uil else None,
-                origin_tab_key=target_tab_key, warn_change_desc=warn_msg,
+                origin_tab_key=BashNotebook._data_to_tab_key[data_key],
+                warn_change_desc=warn_msg,
                 decorated_items=warning_dec_items)
-        def mk_mods_warning(warn_msg: str, warning_items: Iterable[FName]):
-            """Version of mk_warning for the Mods tab."""
-            return mk_warning(warn_msg, warning_items,
-                target_uil=self.modList, target_tab_key='Mods')
-        def mk_saves_warning(warn_msg: str, warning_items: Iterable[FName]):
-            """Version of mk_warning for the Saves tab."""
-            return mk_warning(warn_msg, warning_items,
-                target_uil=self.saveList, target_tab_key='Saves')
-        def mk_bsa_warning(warn_msg: str, warning_items: Iterable[FName]):
-            """Version of mk_warning for the BSAs tab."""
-            return mk_warning(warn_msg, warning_items,
-                target_uil=self.bsaList, target_tab_key='BSAs')
         multi_warnings = []
         corruptMods = set(bosh.modInfos.corrupted)
+        key_mods, key_bsas = KEY_MODS, KEY_BSAS
         if warn_mods and not corruptMods <= self.knownCorrupted:
-            multi_warnings.append(mk_mods_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following plugins could not be read. This most likely '
                   'means that they are corrupt.'),
-                corruptMods - self.knownCorrupted))
+                corruptMods - self.knownCorrupted, key_mods))
             self.knownCorrupted |= corruptMods
         corruptSaves = set(bosh.saveInfos.corrupted)
         if warn_saves and not corruptSaves <= self.knownCorrupted:
-            multi_warnings.append(mk_saves_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following save files could not be read. This most '
                   'likely means that they are corrupt.'),
-                corruptSaves - self.knownCorrupted))
+                corruptSaves - self.knownCorrupted, KEY_SAVES))
             self.knownCorrupted |= corruptSaves
         valid_vers = bush.game.Esp.validHeaderVersions
         invalidVersions = {ck for ck, x in bosh.modInfos.items() if
                            all(x.header.version != v for v in valid_vers)}
         if warn_mods and not invalidVersions <= self.known_invalid_versions:
-            multi_warnings.append(mk_mods_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following plugins have header versions that are not '
                   'valid for this game. This may mean that they are '
                   'actually intended to be used for a different game.'),
-                invalidVersions - self.known_invalid_versions))
+                invalidVersions - self.known_invalid_versions, key_mods))
             self.known_invalid_versions |= invalidVersions
         old_fvers = bosh.modInfos.older_form_versions
         if warn_mods and not old_fvers <= self.known_older_form_versions:
-            multi_warnings.append(mk_mods_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following plugins use an older Form Version for their '
                   'main header. This most likely means that they were not '
                   'ported properly (if at all).'),
-                old_fvers - self.known_older_form_versions))
+                old_fvers - self.known_older_form_versions, key_mods))
             self.known_older_form_versions |= old_fvers
         if warn_strings and bosh.modInfos.new_missing_strings:
-            multi_warnings.append(mk_mods_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following plugins are marked as localized, but are '
                   'missing strings localization files in the language your '
                   'game is set to. This will cause CTDs if they are '
-                  'activated.'), bosh.modInfos.new_missing_strings))
+                  'activated.'), bosh.modInfos.new_missing_strings, key_mods))
             bosh.modInfos.new_missing_strings.clear()
         bsa_mvers = bosh.bsaInfos.mismatched_versions
         if warn_bsas and not bsa_mvers <= self.known_mismatched_version_bsas:
-            multi_warnings.append(mk_bsa_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following BSAs have a version different from the one '
                   '%(game_name)s expects. This can lead to CTDs, please '
                   'extract and repack them using the %(ck_name)s-provided '
                   'tool.') % {'game_name': bush.game.display_name,
                               'ck_name': bush.game.Ck.long_name},
-                bsa_mvers - self.known_mismatched_version_bsas))
+                bsa_mvers - self.known_mismatched_version_bsas, key_bsas))
             self.known_mismatched_version_bsas |= bsa_mvers
         ba2_colls = bosh.bsaInfos.ba2_collisions
         if warn_bsas and not ba2_colls <= self.known_ba2_collisions:
-            multi_warnings.append(mk_bsa_warning(
+            multi_warnings.append(_mk_warning(
                 _('The following BA2s have filenames whose hashes collide, '
                   'which will cause one or more of them to fail to work '
                   'correctly. This should be corrected by the mod author(s) '
                   'by renaming the files to avoid the collision.'),
-                ba2_colls - self.known_ba2_collisions))
+                ba2_colls - self.known_ba2_collisions, key_bsas))
             self.known_ba2_collisions |= ba2_colls
         if multi_warnings:
             MultiWarningDialog(self,

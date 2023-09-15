@@ -704,6 +704,10 @@ class UIList(PanelWin):
     def __init__(self, parent, keyPrefix, listData=None, panel=None):
         super().__init__(parent, wants_chars=True, no_border=False)
         self.data_store = listData # never use as local variable name !
+        try:
+            Link.Frame.all_uilists[self.data_store.unique_store_key] = self
+        except AttributeError:
+            pass # not one of the singleton DataStores
         self.panel = panel
         #--Settings key
         self.keyPrefix = keyPrefix
