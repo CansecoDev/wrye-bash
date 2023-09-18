@@ -36,6 +36,7 @@ import wx.adv
 
 from . import bass # for dirs - try to avoid
 from . import bolt
+from .bass import Store
 from .bolt import FName, Path, deprint, readme_url
 from .env import BTN_NO, BTN_YES, TASK_DIALOG_AVAILABLE
 from .exception import CancelError, SkipError, StateError
@@ -47,7 +48,6 @@ from .gui import BusyCursor, Button, CheckListBox, Color, DialogWindow, \
     AutoSize, get_shift_down, ContinueDialog, askText, askNumber, askYes, \
     askWarning, showOk, showError, showWarning, showInfo, TreeNodeFormat
 from .gui.base_components import _AComponent
-from .tab_comms import SAVES
 
 # Print a notice if wx.html2 is missing
 if not web_viewer_available():
@@ -1471,7 +1471,8 @@ class UIList(PanelWin):
         try:
             self.data_store.delete(dd_items, recycle=dd_recycle)
         except (PermissionError, CancelError, SkipError): pass
-        self.RefreshUI(refresh_others=SAVES) # also cleans _gList internal dicts
+        # Also cleans _gList internal dicts
+        self.RefreshUI(refresh_others=Store.SAVES.ALWAYS())
 
     def open_data_store(self):
         try:
@@ -2127,7 +2128,7 @@ class UIList_Hide(EnabledLink):
                           {'hdir': self._data_store.hidden_dir})
             if not self._askYes(message, _(u'Hide Files')): return
         self.window.hide(self._filter_unhideable(self.selected))
-        self.window.RefreshUI(refresh_others=SAVES)
+        self.window.RefreshUI(refresh_others=Store.SAVES.ALWAYS())
 
 # wx Wrappers -----------------------------------------------------------------
 #------------------------------------------------------------------------------
