@@ -986,19 +986,14 @@ class Mod_RebuildPatch(_Mod_BP_Link):
             # we might have de-activated plugins so recalculate active sets
             bashed_patch.set_active_arrays(bosh.modInfos)
         missing, delinquent = bashed_patch.active_mm, bashed_patch.delinquent
-        def mk_error(warn_msg: str, warning_items: Iterable[FName]):
-            return MasterErrorsDialog.make_change_entry(
-                mods_list_images=self.window._icons, mods_change_desc=warn_msg,
-                decorated_plugins=self.window.decorate_tree_dict(
-                    {i: [] for i in sorted(warning_items)}))
         bp_master_errors = []
         if missing:
-            bp_master_errors.append(mk_error(_(
+            bp_master_errors.append(MasterErrorsDialog.make_change_entry(_(
                 'The following plugins have missing masters and are active. '
                 'This will cause the game to crash. Please disable them.'),
                 missing))
         if delinquent:
-            bp_master_errors.append(mk_error(_(
+            bp_master_errors.append(MasterErrorsDialog.make_change_entry(_(
                 'These mods have delinquent masters, which means they load '
                 'before their masters. This is undefined behavior. Please '
                 'adjust your load order to fix this.'), delinquent))

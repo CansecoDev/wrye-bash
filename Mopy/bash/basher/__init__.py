@@ -1280,6 +1280,8 @@ class ModList(_ModsUIList):
             ui_impacted, skip_active=True)
         return ui_impacted | ui_imported | ui_merged
 
+    _activated_key = 0
+    _deactivated_key = 1
     @balt.conversation
     def _toggle_active_state(self, *mods):
         """Toggle active state of mods given - all mods must be either
@@ -1348,29 +1350,14 @@ class ModList(_ModsUIList):
             balt.askContinue(self, warn_msg, warn_cont_key, show_cancel=False)
         if touched:
             bosh.modInfos.cached_lo_save_active()
-            self.__toggle_active_msg(changes)
+            # If we have no changes, pass - if we do have changes, only one of
+            # these can be truthy at a time
+            if ch := changes[self._activated_key]:
+                MastersAffectedDialog(self, ch).show_modeless()
+            elif ch := changes[self._deactivated_key]:
+                DependentsAffectedDialog(self, ch).show_modeless()
             self.RefreshUI(redraw=self._lo_redraw_targets(touched),
                            refresh_others=Store.SAVES.ALWAYS())
-
-    _activated_key = 0
-    _deactivated_key = 1
-    def __toggle_active_msg(self, changes_dict):
-        masters_activated = self.decorate_tree_dict(
-            changes_dict[self._activated_key])
-        dependents_deactivated = self.decorate_tree_dict(
-            changes_dict[self._deactivated_key])
-        # If we have no changes, abort - if we do have changes, only one of
-        # these can be truthy at a time
-        if masters_activated:
-            target_dlg = MastersAffectedDialog
-            target_tree_dict = masters_activated
-        elif dependents_deactivated:
-            target_dlg = DependentsAffectedDialog
-            target_tree_dict = dependents_deactivated
-        else:
-            return
-        target_dlg(self, mods_list_images=self._icons, ##: todo use make_change_entry!
-            decorated_plugins=target_tree_dict).show_modeless()
 
     # Undo/Redo ---------------------------------------------------------------
     def _undo_redo_op(self, undo_or_redo):
@@ -4380,19 +4367,9 @@ class BashFrame(WindowFrame):
 
     def warn_load_order(self):
         """Warn if plugins.txt has bad or missing files, or is overloaded."""
-        def mk_warning(lo_warn_msg: str, warning_plugins: Iterable[FName]):
-            """Helper for creating a single warning change entry from the
-            specified warning message and to-be-highlighted plugins."""
-            mod_uilist = self.all_uilists[Store.MODS]
-            warning_dec_plugins = mod_uilist.decorate_tree_dict(
-                {p: [] for p in sorted(warning_plugins)})
-            return LoadOrderSanitizedDialog.make_change_entry(
-                mods_list_images=mod_uilist._icons,
-                mods_change_desc=lo_warn_msg,
-                decorated_plugins=warning_dec_plugins)
         lo_warnings = []
         if bosh.modInfos.selectedBad:
-            lo_warnings.append(mk_warning(
+            lo_warnings.append(LoadOrderSanitizedDialog.make_change_entry(
                 _('The following plugins could not be found in the '
                   '%(data_folder)s folder or are corrupt and have thus been '
                   'removed from the load order.') % {
@@ -4409,10 +4386,10 @@ class BashFrame(WindowFrame):
                 warn_msg = _('The following plugins have been deactivated '
                              'because only %(max_regular_plugins)d plugins '
                              'may be active at the same time.')
-            lo_warnings.append(mk_warning(warn_msg % {
-                'max_regular_plugins': load_order.max_espms(),
-                'max_esl_plugins': load_order.max_esls(),
-            }, bosh.modInfos.selectedExtra))
+            lo_warnings.append(LoadOrderSanitizedDialog.make_change_entry(
+                warn_msg % {'max_regular_plugins': load_order.max_espms(),
+                            'max_esl_plugins': load_order.max_esls(), },
+                bosh.modInfos.selectedExtra))
             bosh.modInfos.selectedExtra = set()
         ##: Disable this message for now, until we're done testing if we can
         # get the game to load these files
@@ -4430,23 +4407,7 @@ class BashFrame(WindowFrame):
 
     def warn_corrupted(self, warn_mods=False, warn_saves=False,
                        warn_strings=False, warn_bsas=False):
-        def _mk_warning(warn_msg: str, warning_items: Iterable[FName],
-                        data_key: Store):
-            """Helper for creating a single warning change entry from the
-            specified warning message and to-be-highlighted items, relative to
-            the specified UIList/Tab."""
-            target_uil = self.all_uilists.get(data_key)
-            if target_uil is not None:
-                warning_dec_items = target_uil.decorate_tree_dict(
-                    {i: [] for i in sorted(warning_items)})
-            else:
-                # Tab is not enabled, no way to decorate with it
-                warning_dec_items = {
-                    i: (None, []) for i in sorted(warning_items)}
-            return MultiWarningDialog.make_change_entry(
-                uil_images=target_uil._icons if target_uil else None,
-                origin_tab_key=data_key.value, warn_change_desc=warn_msg,
-                decorated_items=warning_dec_items)
+        _mk_warning = MultiWarningDialog.make_change_entry # to wrap better
         multi_warnings = []
         corruptMods = set(bosh.modInfos.corrupted)
         key_mods, key_bsas = Store.MODS, Store.BSAS
