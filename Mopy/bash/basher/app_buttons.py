@@ -119,6 +119,10 @@ class StatusBar_Button(ItemLink):
 
     def set_sb_button_tooltip(self): pass
 
+    def Execute(self):
+        if self.gButton and self.gButton._native_widget.HasCapture():
+            self.gButton._native_widget.ReleaseMouse()
+
 #------------------------------------------------------------------------------
 # App Links -------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -195,6 +199,7 @@ class _App_Button(StatusBar_Button):
                              'command line arguments failed to encode.'))
 
     def Execute(self):
+        super().Execute()
         if not self.IsPresent():
             msg = _('Application missing: %(launched_exe_path)s')
             self.ShowError(msg=msg % {'launched_exe_path': self.exePath})
@@ -657,6 +662,7 @@ class _StatefulButton(StatusBar_Button):
 
     def Execute(self):
         """Invert state."""
+        super().Execute()
         self.SetState(-1)
 
 class Obse_Button(_StatefulButton):
@@ -704,6 +710,7 @@ class App_Help(StatusBar_Button):
     imageKey, _tip = 'help.%s', _('Help')
 
     def Execute(self):
+        super().Execute()
         webbrowser.open(bolt.readme_url(mopy=bass.dirs[u'mopy']))
 
 #------------------------------------------------------------------------------
@@ -713,6 +720,7 @@ class App_DocBrowser(StatusBar_Button):
     _tip = _('Doc Browser')
 
     def Execute(self):
+        super().Execute()
         if not Link.Frame.docBrowser:
             DocBrowser().show_frame()
         Link.Frame.docBrowser.raise_frame()
@@ -723,6 +731,7 @@ class App_Settings(StatusBar_Button):
     imageKey, _tip = 'settings_button.%s', _('Settings')
 
     def Execute(self):
+        super().Execute()
         SettingsDialog.display_dialog()
 
     def DoPopupMenu(self):
@@ -734,7 +743,9 @@ class App_Restart(StatusBar_Button):
     _tip = _(u'Restart')
     imageKey = 'reload.%s'
 
-    def Execute(self): Link.Frame.Restart()
+    def Execute(self):
+        super().Execute()
+        Link.Frame.Restart()
 
 #------------------------------------------------------------------------------
 class App_PluginChecker(StatusBar_Button):
@@ -743,4 +754,5 @@ class App_PluginChecker(StatusBar_Button):
     imageKey = 'plugin_checker.%s'
 
     def Execute(self):
+        super().Execute()
         PluginChecker.create_or_raise()
