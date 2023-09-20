@@ -1289,7 +1289,7 @@ class ModList(_ModsUIList):
         active = [mod for mod in mods if load_order.cached_is_active(mod)]
         assert not active or len(active) == len(mods) # empty or all
         inactive = (not active and mods) or []
-        changes = collections.defaultdict(dict)
+        changes: defaultdict[int, dict] = defaultdict(dict)
         # Track which plugins we activated or deactivated
         touched = set()
         # Deactivate ?
@@ -4333,7 +4333,7 @@ class BashFrame(WindowFrame):
         # refresh the backend - order matters, bsas must come first for strings
         # inis and screens call refresh in ShowPanel
         ##: maybe we need to refresh inis and *not* refresh saves but on ShowPanel?
-        ui_refresh = defaultdict(bool, {
+        ui_refresh: defaultdict[Store, bool] = defaultdict(bool, { ##: is this needed?
             store.unique_store_key: not booting and store.refresh()
             for store in (bosh.bsaInfos, bosh.modInfos, bosh.saveInfos,
                           bosh.se_plugin_infos)})
