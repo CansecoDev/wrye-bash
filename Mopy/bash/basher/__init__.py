@@ -3989,10 +3989,13 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         if settings[u'bash.installers.fastStart'] and pageIndex == iInstallers:
             pageIndex = iMods
         self.SetSelection(pageIndex)
-        self.currentPage = tab_info[_title_to_tab[
-            self.GetPage(self.GetSelection()).Label]][2]
         #--Setup Popup menu for Right Click on a Tab
         self.Bind(wx.EVT_CONTEXT_MENU, self.DoTabMenu)
+
+    @property
+    def currentPage(self):
+        return tabInfo[_title_to_tab[
+            self.GetPage(self.GetSelection()).Label]][2]
 
     @staticmethod
     def tabLinks(menu):
@@ -4055,8 +4058,6 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         """Call panel's ShowPanel() and set the current panel."""
         if event.GetId() == self.GetId(): ##: why ?
             bolt.GPathPurge()
-            self.currentPage = tabInfo[_title_to_tab[
-                self.GetPage(self.GetSelection()).Label]][2]
             self.currentPage.ShowPanel(
                 refresh_target=load_order.using_ini_file())
             event.Skip() ##: shouldn't this always be called ?
