@@ -3872,7 +3872,7 @@ class SEPluginPanel(BashTab):
             'status_num': len(self.listData)}
 
 #--Tabs menu ------------------------------------------------------------------
-_widget_to_panel = {}
+_title_to_tab = {v[1]: k for k, v in tabInfo.items()}
 class _Tab_Link(AppendableLink, CheckLink, EnabledLink):
     """Handle hiding/unhiding tabs."""
 
@@ -3926,7 +3926,6 @@ class _Tab_Link(AppendableLink, CheckLink, EnabledLink):
             if not panel:
                 panel = globals()[className](Link.Frame.notebook)
                 tab_info[self.tabKey][2] = panel
-                _widget_to_panel[panel.wx_id_()] = panel
             if insertAt > Link.Frame.notebook.GetPageCount():
                 Link.Frame.notebook.AddPage(panel._native_widget,title)
             else:
@@ -3976,7 +3975,6 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
                 item = panel(self)
                 self.AddPage(item._native_widget, title)
                 tab_info[page][2] = item
-                _widget_to_panel[item.wx_id_()] = item
                 deprint(f"Panel '{title}' constructed successfully")
             except:
                 if page == 'Mods':
@@ -3991,8 +3989,8 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         if settings[u'bash.installers.fastStart'] and pageIndex == iInstallers:
             pageIndex = iMods
         self.SetSelection(pageIndex)
-        self.currentPage = _widget_to_panel[
-            self.GetPage(self.GetSelection()).GetId()]
+        self.currentPage = tab_info[_title_to_tab[
+            self.GetPage(self.GetSelection()).Label]][2]
         #--Setup Popup menu for Right Click on a Tab
         self.Bind(wx.EVT_CONTEXT_MENU, self.DoTabMenu)
 
@@ -4057,8 +4055,8 @@ class BashNotebook(wx.Notebook, balt.TabDragMixin):
         """Call panel's ShowPanel() and set the current panel."""
         if event.GetId() == self.GetId(): ##: why ?
             bolt.GPathPurge()
-            self.currentPage = _widget_to_panel[
-                self.GetPage(event.GetSelection()).GetId()]
+            self.currentPage = tabInfo[_title_to_tab[
+                self.GetPage(self.GetSelection()).Label]][2]
             self.currentPage.ShowPanel(
                 refresh_target=load_order.using_ini_file())
             event.Skip() ##: shouldn't this always be called ?
