@@ -2234,7 +2234,7 @@ class DnDStatusBar(wx.StatusBar):
                 return i, button_link
         return wx.NOT_FOUND, None
 
-    def OnDragStart(self, event):
+    def OnDragStart(self, event): # we don't skip blocks EVT_MOTION somehow
         self.dragging, button_link = self._getButtonIndex(event)
 
     def OnDragEndForced(self, event):
